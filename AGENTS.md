@@ -29,7 +29,13 @@
 - `google flow custom/MainWindow.axaml(.cs)` — `NativeWebView` 이벤트 연결
 - `google flow custom/Scripts/flow-custom.js` — 임베디드 리소스로 들어가는 사용자 CSS/JS
 - `google flow custom/Assets/icon.png|ico` — 앱 아이콘(Pillow로 생성)
-- `mcp/index.mjs` — Antigravity 연동용 MCP 서버 (CDP 원격 제어: 실행, 화면 캡처, 프롬프트 입력, 다운로드 수집)
+- `mcp/index.mjs` — Antigravity 연동용 MCP 서버 (CDP 원격 제어: 실행, 상태, 화면 캡처, 프롬프트 입력, 다운로드 수집)
+
+## 4. 합성 품질 이슈 및 Image-to-Image 참조 필수 원칙 (2026-11-24)
+- **문제 진단:** Text-to-Image(순수 텍스트 프롬프트)만 주입할 경우 모델(Nano Banana 등)이 텍스트 설명만 보고 캐릭터를 처음부터 다시 그려 원작의 고유 선화·그림체·채색 스타일이 왜곡되는 이질감 발생.
+- **해결 방안:** 기준 이미지와 대상 썸네일 2장을 **Flow 프로젝트의 '미디어 업로드(소재 추가)'로 등록**한 뒤 참조 소재로 지정하여 생성해야 기존 62종과 동일한 1:1 원화 보존 품질 달성 가능.
+- **MCP 확장 방향:** `flow_upload_media` 도구를 통해 CDP(`DOM.setFileInputFiles`)로 Flow 웹 화면의 `<input type="file">`에 로컬 이미지 2장을 직접 업로드하고 프롬프트 참조로 연결하는 기능 지원 필요.
+
 
 ## 4. 시도했다가 버린 것 / 주의 (Dead Ends)
 - **`labs.google/fx/tools/flow`:** 예전 Flow 주소. 지금은 `https://flow.google.com/`로 308 리다이렉트된다. 시작 URL은 새 주소를 직접 쓴다.
