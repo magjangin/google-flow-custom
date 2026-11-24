@@ -4,9 +4,11 @@
 
 ## 0. 프로젝트 개요
 - **무엇인가:** Google Flow(`https://flow.google.com/`)를 독립 창으로 띄우는 Avalonia WebView 앱(net10). 사용자 스크립트(`Scripts/flow-custom.js`)를 문서 생성 시점에 주입.
+- **MCP 연동:** `mcp/index.mjs`에 Antigravity/Claude Code용 MCP 서버 내장(`google-flow-custom`). Antigravity 5시간 쿼터 소진 시 에이전트가 CDP(`--remote-debugging-port=9334`)를 통해 직접 Flow를 조종하여 이미지 생성 및 다운로드 자동화 가능.
 - **종류:** 게임 모드가 아닌 앱/도구 → 게임 버전 고정(Build ID/DepotDownloader/.acf)과 Mono/Il2Cpp 백엔드는 **해당 없음**.
 - **원격 저장소:** `origin` = https://github.com/magjangin/google-flow-tool (공개, `main`), `local` = `H:\local-repos\google flow custom.git` (로컬 백업 bare 레포). 커밋 후 두 곳 모두 푸시할 것.
 - **기술 스택:** .NET 10, Avalonia 12.0.5, `Avalonia.Controls.WebView` 12.0.1, `Microsoft.Web.WebView2` 1.0.3124.44 (youtube studio custom과 같은 버전).
+
 
 ## 1. 검증 상태 (2026-11-24 실측)
 - 빌드 성공, 앱 실행 시 `flow.google.com` 로딩 확인 (로그인 전이라 `/about` 랜딩 → Google 로그인 화면 표시).
@@ -27,6 +29,7 @@
 - `google flow custom/MainWindow.axaml(.cs)` — `NativeWebView` 이벤트 연결
 - `google flow custom/Scripts/flow-custom.js` — 임베디드 리소스로 들어가는 사용자 CSS/JS
 - `google flow custom/Assets/icon.png|ico` — 앱 아이콘(Pillow로 생성)
+- `mcp/index.mjs` — Antigravity 연동용 MCP 서버 (CDP 원격 제어: 실행, 화면 캡처, 프롬프트 입력, 다운로드 수집)
 
 ## 4. 시도했다가 버린 것 / 주의 (Dead Ends)
 - **`labs.google/fx/tools/flow`:** 예전 Flow 주소. 지금은 `https://flow.google.com/`로 308 리다이렉트된다. 시작 URL은 새 주소를 직접 쓴다.

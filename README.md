@@ -38,6 +38,8 @@ Flow를 독립 앱 창으로 띄우고, 필요한 화면 수정은 스크립트 
   - `MutationObserver`로 Flow의 SPA 화면 전환에도 스타일이 유지됩니다.
   - 스크립트는 `flow.google.com`에서만 동작하며 Google 로그인 페이지는 건드리지 않습니다.
 - 🛠️ **DevTools(F12) 내장**: 우클릭 "검사"로 실제 DOM을 확인해 selector를 찾을 수 있습니다.
+- 🤖 **Antigravity MCP 서버 내장 (`mcp/index.mjs`)**: Chrome DevTools Protocol(CDP, 포트 9334)을 통해 에이전트가 Flow 창을 직접 실행·상태 확인·스크린샷 캡처·프롬프트 입력·생성물 자동 수집까지 프로그래밍 방식으로 조종할 수 있습니다.
+
 
 ---
 
