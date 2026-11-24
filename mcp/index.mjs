@@ -250,6 +250,66 @@ async function handleFlowType(args) {
   };
 }
 
+async function handleFlowUploadMedia(args) {
+  const { files, selector = 'input[type="file"]' } = args;
+  if (!files || !Array.isArray(files) || files.length === 0) {
+    throw new Error("files 매개변수(파일 경로 배열)가 필요합니다.");
+  }
+
+  // 모든 파일 경로 존재 여부 검사
+  for (const file of files) {
+    if (!existsSync(file)) {
+      throw new Error(`파일을 찾을 수 없습니다: ${file}`);
+    }
+  }
+
+  const ws = await getActiveWs();
+  await sendCdp(ws, "DOM.enable");
+  const doc = await sendCdp(ws, "DOM.getDocument", { depth: -1 });
+
+  let queryRes;
+  try {
+    queryRes = await sendCdp(ws, "DOM.querySelector", {
+      nodeId: doc.root.nodeId,
+      selector
+    });
+  } catch (err) {
+    throw new Error(`파일 입력 요소를 찾는 중 오류 발생 (${selector}): ${err.message}`);
+  }
+
+  if (!queryRes || !queryRes.nodeId || queryRes.nodeId === 0) {
+    throw new Error(`화면에서 파일 입력 요소(${selector})를 찾을 수 없습니다. 미디어 추가 버튼을 먼저 클릭해야 할 수 있습니다.`);
+  }
+
+  await sendCdp(ws, "DOM.setFileInputFiles", {
+    nodeId: queryRes.nodeId,
+    files
+  });
+
+  // input/change 이벤트 트리거
+  await sendCdp(ws, "Runtime.evaluate", {
+    expression: `(() => {
+      const el = document.querySelector(${JSON.stringify(selector)});
+      if (el) {
+        el.dispatchEvent(new Event('change', { bubbles: true }));
+        el.dispatchEvent(new Event('input', { bubbles: true }));
+      }
+    })()`
+  });
+
+  return {
+    content: [{
+      type: "text",
+      text: JSON.stringify({
+        status: "success",
+        message: "미디어 파일이 성공적으로 업로드(주입)되었습니다.",
+        uploadedFiles: files,
+        targetSelector: selector
+      }, null, 2)
+    }]
+  };
+}
+
 async function handleFlowScreenshot(args) {
   const ws = await getActiveWs();
   const cdpRes = await sendCdp(ws, "Page.captureScreenshot", { format: "png" });
@@ -367,6 +427,25 @@ const TOOLS = [
     }
   },
   {
+    name: "flow_upload_media",
+    description: "Google Flow 웹 화면에 로컬 이미지 파일들을 업로드(미디어/소재 추가)합니다. Image-to-Image 참조 합성을 위해 기준 배경 및 대상 썸네일을 등록할 때 사용합니다.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        files: {
+          type: "array",
+          items: { type: "string" },
+          description: "업로드할 로컬 이미지 파일의 절대 경로 배열"
+        },
+        selector: {
+          type: "string",
+          description: "파일 입력 input 요소의 CSS 선택자 (기본값: input[type=\"file\"])"
+        }
+      },
+      required: ["files"]
+    }
+  },
+  {
     name: "flow_screenshot",
     description: "현재 Google Flow 창의 실제 화면을 캡처하여 이미지 파일로 저장하고 경로를 반환합니다.",
     inputSchema: {
@@ -448,6 +527,7 @@ async function handleRpc(req) {
         case "flow_eval": res = await handleFlowEval(args); break;
         case "flow_click": res = await handleFlowClick(args); break;
         case "flow_type": res = await handleFlowType(args); break;
+        case "flow_upload_media": res = await handleFlowUploadMedia(args); break;
         case "flow_screenshot": res = await handleFlowScreenshot(args); break;
         case "flow_get_downloads": res = await handleFlowGetDownloads(args); break;
         default:
