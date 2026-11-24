@@ -1,0 +1,16 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        mc:Ignorable="d" d:DesignWidth="1280" d:DesignHeight="800"
+        x:Class="google_flow_custom.MainWindow"
+        Title="Google Flow"
+        Icon="/Assets/icon.ico"
+        Width="1440" Height="900"
+        Background="#0B0B0F"
+        WindowStartupLocation="CenterScreen">
+    <NativeWebView x:Name="WebView"
+                   EnvironmentRequested="WebView_OnEnvironmentRequested"
+                   AdapterCreated="WebView_OnAdapterCreated"
+                   NavigationCompleted="WebView_OnNavigationCompleted" />
+</Window>
