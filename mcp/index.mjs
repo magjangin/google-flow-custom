@@ -268,10 +268,15 @@ async function handleFlowType(args) {
   
   const script = `(() => {
     let inputStr = ${JSON.stringify(text)};
-    let el = ${selector ? `document.querySelector(${JSON.stringify(selector)})` : `document.activeElement`};
+    let el = ${selector ? `document.querySelector(${JSON.stringify(selector)})` : null};
     if (!el || (el.tagName !== 'INPUT' && el.tagName !== 'TEXTAREA' && !el.isContentEditable)) {
-      const inputs = Array.from(document.querySelectorAll('.ProseMirror, textarea, input[type="text"], [contenteditable="true"]'));
-      if (inputs.length > 0) el = inputs[0];
+      const pm = document.querySelector('.ProseMirror');
+      if (pm) {
+        el = pm;
+      } else {
+        const inputs = Array.from(document.querySelectorAll('textarea, [contenteditable="true"], input[type="text"]'));
+        if (inputs.length > 0) el = inputs[0];
+      }
     }
     if (!el) return { success: false, error: '입력 필드를 찾을 수 없습니다.' };
     el.focus();
@@ -405,7 +410,7 @@ async function handleFlowGenerateTypography(args) {
   ];
 
   const prompt = promptParts.join(" ");
-  const typeRes = await handleFlowType({ text: prompt, submit });
+  const typeRes = await handleFlowType({ selector: ".ProseMirror", text: prompt, submit });
   return {
     content: [{
       type: "text",
