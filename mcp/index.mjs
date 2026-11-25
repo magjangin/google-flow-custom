@@ -189,51 +189,101 @@ async function handleFlowClick(args) {
   const { selector } = args;
   if (!selector) throw new Error("selector 매개변수가 필요합니다.");
   const ws = await getActiveWs();
-  const script = `(() => {
+  
+  // 1. 요소 위치 및 태그 정보 조회
+  const locateScript = `(() => {
     let el = document.querySelector(${JSON.stringify(selector)});
     if (!el) {
-      // 텍스트 기반 검색 시도
-      const buttons = Array.from(document.querySelectorAll('button, a, [role="button"]'));
-      el = buttons.find(b => (b.innerText || '').includes(${JSON.stringify(selector)}));
+      const buttons = Array.from(document.querySelectorAll('button, a, [role="button"], [aria-label]'));
+      el = buttons.find(b => (b.innerText || '').includes(${JSON.stringify(selector)}) || b.getAttribute('aria-label') === ${JSON.stringify(selector)});
     }
-    if (!el) return { success: false, error: '요소를 찾을 수 없습니다: ' + ${JSON.stringify(selector)} };
+    if (!el) return null;
     el.scrollIntoView({ block: 'center' });
-    el.click();
-    return { success: true, tagName: el.tagName, text: el.innerText };
+    const rect = el.getBoundingClientRect();
+    return {
+      tagName: el.tagName,
+      text: el.innerText,
+      x: rect.x + rect.width / 2,
+      y: rect.y + rect.height / 2
+    };
   })()`;
 
-  const res = await sendCdp(ws, "Runtime.evaluate", {
-    expression: script,
+  const locateRes = await sendCdp(ws, "Runtime.evaluate", {
+    expression: locateScript,
     returnByValue: true
+  });
+
+  const targetInfo = locateRes?.result?.value;
+  if (!targetInfo) {
+    return {
+      content: [{
+        type: "text",
+        text: JSON.stringify({ success: false, error: '요소를 찾을 수 없습니다: ' + selector }, null, 2)
+      }]
+    };
+  }
+
+  // 2. CDP 마우스 이벤트로 정확한 물리 클릭 발생 (Angular/Material/ProseMirror 대응)
+  if (targetInfo.x > 0 && targetInfo.y > 0) {
+    await sendCdp(ws, "Input.dispatchMouseEvent", {
+      type: "mousePressed",
+      x: Math.round(targetInfo.x),
+      y: Math.round(targetInfo.y),
+      button: "left",
+      clickCount: 1
+    });
+    await sendCdp(ws, "Input.dispatchMouseEvent", {
+      type: "mouseReleased",
+      x: Math.round(targetInfo.x),
+      y: Math.round(targetInfo.y),
+      button: "left",
+      clickCount: 1
+    });
+  }
+
+  // 3. JS 클릭도 폴백으로 트리거
+  await sendCdp(ws, "Runtime.evaluate", {
+    expression: `(() => {
+      let el = document.querySelector(${JSON.stringify(selector)});
+      if (!el) {
+        const buttons = Array.from(document.querySelectorAll('button, a, [role="button"], [aria-label]'));
+        el = buttons.find(b => (b.innerText || '').includes(${JSON.stringify(selector)}) || b.getAttribute('aria-label') === ${JSON.stringify(selector)});
+      }
+      if (el) el.click();
+    })()`
   });
 
   return {
     content: [{
       type: "text",
-      text: JSON.stringify(res?.result?.value || res, null, 2)
+      text: JSON.stringify({ success: true, ...targetInfo }, null, 2)
     }]
   };
 }
 
 async function handleFlowType(args) {
-  const { selector, text } = args;
+  const { selector, text, submit = false } = args;
   if (!text) throw new Error("text 매개변수가 필요합니다.");
   const ws = await getActiveWs();
   const script = `(() => {
     let el = ${selector ? `document.querySelector(${JSON.stringify(selector)})` : `document.activeElement`};
     if (!el || (el.tagName !== 'INPUT' && el.tagName !== 'TEXTAREA' && !el.isContentEditable)) {
-      const inputs = Array.from(document.querySelectorAll('textarea, input[type="text"], [contenteditable="true"]'));
+      const inputs = Array.from(document.querySelectorAll('.ProseMirror, textarea, input[type="text"], [contenteditable="true"]'));
       if (inputs.length > 0) el = inputs[0];
     }
     if (!el) return { success: false, error: '입력 필드를 찾을 수 없습니다.' };
     el.focus();
-    if (el.isContentEditable) {
-      el.innerText = ${JSON.stringify(text)};
+    
+    if (el.classList.contains('ProseMirror') || el.isContentEditable) {
+      document.execCommand('selectAll', false, null);
+      document.execCommand('delete', false, null);
+      document.execCommand('insertText', false, ${JSON.stringify(text)});
+      el.dispatchEvent(new Event('input', { bubbles: true }));
     } else {
       el.value = ${JSON.stringify(text)};
+      el.dispatchEvent(new Event('input', { bubbles: true }));
+      el.dispatchEvent(new Event('change', { bubbles: true }));
     }
-    el.dispatchEvent(new Event('input', { bubbles: true }));
-    el.dispatchEvent(new Event('change', { bubbles: true }));
     return { success: true, value: el.value || el.innerText };
   })()`;
 
@@ -241,6 +291,11 @@ async function handleFlowType(args) {
     expression: script,
     returnByValue: true
   });
+
+  if (submit) {
+    await new Promise(r => setTimeout(r, 200));
+    await handleFlowClick({ selector: '[aria-label="생성 시작"]' });
+  }
 
   return {
     content: [{
@@ -421,7 +476,8 @@ const TOOLS = [
       type: "object",
       properties: {
         text: { type: "string", description: "입력할 텍스트(프롬프트)" },
-        selector: { type: "string", description: "대상 CSS 선택자 (생략 시 첫 번째 입력 필드 또는 활성 요소)" }
+        selector: { type: "string", description: "대상 CSS 선택자 (생략 시 첫 번째 입력 필드 또는 활성 요소)" },
+        submit: { type: "boolean", description: "입력 후 생성 시작 버튼을 자동으로 클릭할지 여부 (기본값: false)" }
       },
       required: ["text"]
     }
