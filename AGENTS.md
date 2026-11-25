@@ -15,8 +15,9 @@
 - **자동 다운로드 파이프라인:** 웹 상에서 fetch -> Blob 생성 -> `%USERPROFILE%\Downloads\GoogleFlow_Downloads`로 자동 수집 및 MCP `flow_get_downloads` 연동 검증.
 - **PixAI Edition 기능 검증:**
   - `flow-custom.js`: 딥 바이올렛/네온 다크 테마(CSS), 카드 호버 네온 글로우, 슬림 스크롤바.
-  - PixAI Studio Helper 위젯: 1클릭 16:9/9:16/1:1/4:3 비율 변경, Quality Boost 태그, 애니메 프리셋, 테마 ON/OFF 스위치, `Alt + P` 단축키 토글.
-  - MCP `handleFlowClick` / `handleFlowType`: Angular/ProseMirror 대응 물리 마우스 이벤트 및 `insertText` 주입, `submit: true` 지원.
+  - Danbooru/PixAI 태그 2D 원화 변환 엔진: `character: Surtr_(arknights), copyright: arknights` 및 `mrg style`, `rabbit hole` 등 단부루 메타 태그를 감지하여 100% 2D 일본 애니메이션 셀화(Key visual, Clean outlines, Cell shaded) 프롬프트로 전처리/변환.
+  - PixAI Studio Helper 위젯: 1클릭 16:9/9:16/1:1/4:3 비율 변경, Quality Boost 태그, 애니메 프리셋, 단부루 자동 최적화 스위치, 테마 ON/OFF 스위치, `Alt + P` 단축키 토글.
+  - MCP `handleFlowClick` / `handleFlowType`: Angular/ProseMirror 대응 물리 마우스 이벤트 및 `insertText` 주입, `autoOptimize: true`, `submit: true` 지원.
 
 ## 2. 설계 의도 (Rationale)
 - **`GoogleFlowWebView.cs`에 Flow 관련 동작을 모으고 `MainWindow`는 연결만:** youtube studio custom의 `YoutubeStudioWebView`와 같은 분리.

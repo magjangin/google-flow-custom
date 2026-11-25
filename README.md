@@ -37,8 +37,9 @@
 
 ### ⚡ 2. PixAI Studio Helper 툴바 위젯 (`Alt + P`)
 - **📐 1클릭 화면 비율 변경**: 번거로운 팝업 메뉴 탐색 없이 `16:9 와이드`, `9:16 쇼츠`, `1:1 정사각`, `4:3 표준`을 1클릭으로 즉시 세팅.
-- **🌟 Quality Boost 태그**: `masterpiece`, `best quality`, `ultra-detailed`, `sharp focus`, `detailed eyes`, `mrg style`, `cinematic lighting` 등 고품질 애니 일러스트 프롬프트 즉시 주입.
-- **🎀 Anime Character & Style Presets**: `Zero Two`, `Hatsune Miku (Rabbit Hole)`, `1girl solo`, `cyberpunk` 등 대표 서브컬처 프리셋 지원.
+- **⚡ Danbooru/PixAI 태그 2D 애니 원화 최적화 엔진**: `character: Surtr_(arknights), copyright: arknights, ...` 같은 Danbooru/PixAI 메타 태그를 입력창에 넣으면, Google Flow가 100% 완벽한 2D 일본 애니메이션 원화 작화(Clean lineart, Cell shaded key visual)로 인식하도록 자동 변환/확장합니다.
+- **🌟 Quality Boost 태그**: `2D Anime Cell`, `Key Visual`, `Detailed Anime Eyes`, `Dynamic Pose` 등 고품질 애니 일러스트 프롬프트 즉시 주입.
+- **🎀 Anime Character & Style Presets**: `Surtr (명일방주)`, `Hatsune Miku (Rabbit Hole)`, `Zero Two` 등 대표 서브컬처 프리셋 원클릭 제공.
 - **단축키 지원**: `Alt + P`로 언제든 위젯을 접거나 펼칠 수 있어 작업 영역을 가리지 않습니다.
 
 ### 🔑 3. 영구 로그인 세션 (Isolated Session)

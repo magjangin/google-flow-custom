@@ -1,5 +1,5 @@
 // Google Flow(flow.google.com) - PixAI Style Enhanced Custom Script
-// WebView2 "document created" 시점 및 NavigationCompleted 2차 주입에 안전하게 동작합니다.
+// Danbooru/PixAI 태그 -> 2D 애니메이션 원화 최적화 엔진 내장
 
 (function () {
     if (location.hostname !== 'flow.google.com') return;
@@ -9,13 +9,67 @@
     const STYLE_ID = 'flow-pixai-style';
     const HELPER_ID = 'flow-pixai-helper';
     const STORAGE_KEY_THEME = 'flow_pixai_theme_enabled';
+    const STORAGE_KEY_OPTIMIZE = 'flow_pixai_auto_optimize';
     const STORAGE_KEY_COLLAPSED = 'flow_pixai_helper_collapsed';
+
+    // ==========================================
+    // 0. Danbooru/PixAI 태그 -> 2D 애니 원화 변환 엔진
+    // ==========================================
+    function optimizeDanbooruPrompt(rawText) {
+        if (!rawText || typeof rawText !== 'string') return rawText;
+
+        let text = rawText.trim();
+        let character = '';
+        let copyright = '';
+
+        // 1. character: ... 추출
+        const charMatch = text.match(/character:\s*([^,\n]+)/i);
+        if (charMatch) {
+            let rawChar = charMatch[1].trim();
+            // 언더스코어 및 시리즈 괄호 분리 (예: Surtr_(arknights) -> Surtr, arknights)
+            const seriesInChar = rawChar.match(/^([^(]+)\(([^)]+)\)$/);
+            if (seriesInChar) {
+                character = seriesInChar[1].replace(/_/g, ' ').trim();
+                if (!copyright) copyright = seriesInChar[2].replace(/_/g, ' ').trim();
+            } else {
+                character = rawChar.replace(/_/g, ' ').trim();
+            }
+            text = text.replace(charMatch[0], '');
+        }
+
+        // 2. copyright: ... 추출
+        const copyMatch = text.match(/copyright:\s*([^,\n]+)/i);
+        if (copyMatch) {
+            copyright = copyMatch[1].replace(/_/g, ' ').trim();
+            text = text.replace(copyMatch[0], '');
+        }
+
+        // 3. 콤마 및 잔여 공백 정리
+        text = text.replace(/^[,\s]+|[,\s]+$/g, '').replace(/,\s*,/g, ',');
+
+        // 4. 특수 태그 맵핑 (mrg style, rabbit hole 등)
+        text = text.replace(/\bmrg style\b/gi, 'Rabbit Hole MV anime key visual style, caststation art style');
+        text = text.replace(/\brabbit hole\b/gi, 'Rabbit Hole theme, vibrant hot pink circular spotlight backdrop, bunny girl outfit with heart cut-out, white bunny ears headband, fishnet stockings');
+
+        // 5. 핵심 2D 애니메이션 원화 품질/작화 앵커 구축
+        let prefix = '2D anime illustration, masterpiece, high-end Japanese anime key visual, clean sharp lineart, cell shaded anime art';
+        if (character && copyright) {
+            prefix += `, ${character} from ${copyright}`;
+        } else if (character) {
+            prefix += `, ${character}`;
+        } else if (copyright) {
+            prefix += `, from ${copyright}`;
+        }
+
+        // 6. 합체 및 중복 태그 제거
+        const tags = [prefix, text].filter(Boolean).join(', ');
+        return tags.replace(/\s{2,}/g, ' ').trim();
+    }
 
     // ==========================================
     // 1. PixAI 사이버/애니 다크 네온 테마 CSS
     // ==========================================
     const PIXAI_CSS = `
-        /* PixAI 네온 테마 변수 */
         :root {
             --pixai-bg-main: #0c0915;
             --pixai-bg-card: rgba(22, 17, 36, 0.85);
@@ -23,11 +77,8 @@
             --pixai-accent-purple: #a855f7;
             --pixai-accent-pink: #ec4899;
             --pixai-accent-cyan: #06b6d4;
-            --pixai-accent-rose: #f43f5e;
             --pixai-border: rgba(168, 85, 247, 0.25);
-            --pixai-border-glow: rgba(236, 72, 153, 0.4);
             --pixai-text: #f3f0fb;
-            --pixai-text-dim: #a79fc2;
         }
 
         body.pixai-theme {
@@ -38,14 +89,12 @@
             color: var(--pixai-text) !important;
         }
 
-        /* 메인 컨테이너 및 배경 */
         body.pixai-theme .aisandbox-content,
         body.pixai-theme flow-app-shell,
         body.pixai-theme .dark-theme {
             background: transparent !important;
         }
 
-        /* 미디어 카드 / 타일 룩앤필 */
         body.pixai-theme .image-tile,
         body.pixai-theme .asset-card,
         body.pixai-theme [class*="card"],
@@ -65,7 +114,6 @@
             box-shadow: 0 6px 20px rgba(236, 72, 153, 0.25), 0 0 10px rgba(168, 85, 247, 0.3) !important;
         }
 
-        /* 이미지 컨테이너 호버 줌 효과 */
         body.pixai-theme .image-thumbnail,
         body.pixai-theme .image {
             border-radius: 8px !important;
@@ -76,7 +124,6 @@
             transform: scale(1.01) !important;
         }
 
-        /* 우측 채팅 및 프롬프트 패널 */
         body.pixai-theme .right-panel,
         body.pixai-theme [class*="chat-panel"],
         body.pixai-theme [class*="session-panel"] {
@@ -85,7 +132,6 @@
             border-left: 1px solid var(--pixai-border) !important;
         }
 
-        /* 프롬프트 입력창 (ProseMirror) */
         body.pixai-theme .ProseMirror {
             background: rgba(22, 17, 36, 0.9) !important;
             border: 1px solid var(--pixai-border) !important;
@@ -100,46 +146,21 @@
             outline: none !important;
         }
 
-        /* 생성 시작 / 전송 버튼 */
         body.pixai-theme .generate-icon-button,
         body.pixai-theme [aria-label="생성 시작"] {
             background: linear-gradient(135deg, #a855f7 0%, #ec4899 100%) !important;
             color: #ffffff !important;
             box-shadow: 0 2px 10px rgba(236, 72, 153, 0.4) !important;
             border: none !important;
-            transition: transform 0.15s, box-shadow 0.15s !important;
-        }
-        body.pixai-theme .generate-icon-button:hover,
-        body.pixai-theme [aria-label="생성 시작"]:hover {
-            transform: scale(1.05) !important;
-            box-shadow: 0 4px 16px rgba(236, 72, 153, 0.6) !important;
         }
 
-        /* 슬림 네온 스크롤바 */
-        body.pixai-theme ::-webkit-scrollbar {
-            width: 7px;
-            height: 7px;
-        }
-        body.pixai-theme ::-webkit-scrollbar-track {
-            background: rgba(12, 9, 21, 0.5);
-        }
-        body.pixai-theme ::-webkit-scrollbar-thumb {
-            background: rgba(168, 85, 247, 0.4);
-            border-radius: 4px;
-        }
-        body.pixai-theme ::-webkit-scrollbar-thumb:hover {
-            background: var(--pixai-accent-pink);
-        }
-
-        /* ==========================================
-           2. PixAI 헬퍼 툴바 위젯 UI
-           ========================================== */
+        /* 헬퍼 위젯 */
         #${HELPER_ID} {
             position: fixed;
             bottom: 96px;
             right: 24px;
-            width: 360px;
-            background: rgba(18, 14, 30, 0.88);
+            width: 370px;
+            background: rgba(18, 14, 30, 0.92);
             backdrop-filter: blur(20px);
             border: 1px solid var(--pixai-border);
             border-radius: 14px;
@@ -156,8 +177,6 @@
             width: auto;
             padding: 6px 12px;
             border-radius: 20px;
-            bottom: 96px;
-            right: 24px;
         }
 
         #${HELPER_ID} .helper-header {
@@ -217,7 +236,6 @@
             border-color: #ec4899;
             color: #ffffff;
             transform: translateY(-1px);
-            box-shadow: 0 0 8px rgba(236, 72, 153, 0.4);
         }
 
         #${HELPER_ID} .pixai-tag-chip.aspect-chip {
@@ -226,10 +244,12 @@
             color: #67e8f9;
             font-weight: 600;
         }
-        #${HELPER_ID} .pixai-tag-chip.aspect-chip:hover {
-            background: rgba(6, 182, 212, 0.35);
-            border-color: #22d3ee;
-            color: #ffffff;
+
+        #${HELPER_ID} .pixai-tag-chip.action-chip {
+            background: linear-gradient(135deg, rgba(168, 85, 247, 0.3) 0%, rgba(236, 72, 153, 0.3) 100%);
+            border-color: #ec4899;
+            color: #ffb4dd;
+            font-weight: 700;
         }
 
         #${HELPER_ID} .helper-btn {
@@ -239,75 +259,67 @@
             cursor: pointer;
             font-size: 12px;
             padding: 2px 6px;
-            border-radius: 4px;
-            transition: color 0.15s;
-        }
-        #${HELPER_ID} .helper-btn:hover {
-            color: #ffffff;
         }
 
-        /* 테마 토글 스위치 */
-        #${HELPER_ID} .theme-toggle-row {
+        #${HELPER_ID} .toggle-row {
             display: flex;
             align-items: center;
             justify-content: space-between;
-            padding-top: 6px;
+            padding-top: 5px;
             border-top: 1px solid rgba(168, 85, 247, 0.15);
             font-size: 11px;
             color: #9d8ec2;
         }
     `;
 
-    // ==========================================
-    // 2. 스타일 주입 함수
-    // ==========================================
     function injectStyle() {
         if (document.getElementById(STYLE_ID)) return;
         const target = document.head || document.documentElement;
         if (!target) return;
-
         const style = document.createElement('style');
         style.id = STYLE_ID;
         style.textContent = PIXAI_CSS;
         target.appendChild(style);
     }
 
-    // ==========================================
-    // 3. 태그 헬퍼 위젯 주입
-    // ==========================================
     function insertTagToPrompt(tagText) {
         const editor = document.querySelector('.ProseMirror');
         if (!editor) return;
-
         editor.focus();
         let currentText = editor.innerText.trim();
         let newText = currentText;
-
         if (newText.length > 0 && !newText.endsWith(',')) {
             newText += ', ';
         } else if (newText.length > 0 && newText.endsWith(',')) {
             newText += ' ';
         }
         newText += tagText;
-
         document.execCommand('selectAll', false, null);
         document.execCommand('delete', false, null);
         document.execCommand('insertText', false, newText);
         editor.dispatchEvent(new Event('input', { bubbles: true }));
     }
 
+    function applyPromptOptimization() {
+        const editor = document.querySelector('.ProseMirror');
+        if (!editor) return;
+        const raw = editor.innerText.trim();
+        if (!raw) return;
+        const optimized = optimizeDanbooruPrompt(raw);
+        editor.focus();
+        document.execCommand('selectAll', false, null);
+        document.execCommand('delete', false, null);
+        document.execCommand('insertText', false, optimized);
+        editor.dispatchEvent(new Event('input', { bubbles: true }));
+    }
+
     function selectAspectRatio(ratioText) {
-        // 설정 트리거 버튼 클릭
         const trigger = document.querySelector('[aria-label="설정 트리거"]');
         if (trigger) trigger.click();
-
         setTimeout(() => {
             const items = Array.from(document.querySelectorAll('.cdk-overlay-container button, .cdk-overlay-container [role="button"], .cdk-overlay-container [role="option"], .cdk-overlay-container [tabindex]'));
             const targetBtn = items.find(el => el.innerText && el.innerText.includes(ratioText));
-            if (targetBtn) {
-                targetBtn.click();
-            }
-            // 팝업 닫기
+            if (targetBtn) targetBtn.click();
             if (trigger) trigger.click();
         }, 120);
     }
@@ -325,13 +337,20 @@
         widget.innerHTML = `
             <div class="helper-header">
                 <span style="display:flex; align-items:center; gap:5px; cursor:pointer;" id="pixai-toggle-collapse">
-                    <span>✨ PixAI Studio Helper</span>
+                    <span>✨ PixAI Anime Studio</span>
                 </span>
                 <div style="display:flex; gap:4px;">
                     <button class="helper-btn" id="pixai-collapse-btn" title="접기/펼치기">${isCollapsed ? '➕' : '➖'}</button>
                 </div>
             </div>
             <div class="helper-body">
+                <div>
+                    <div class="tag-group-title">⚡ 단부루 태그 2D 원화 변환기</div>
+                    <div class="tag-container">
+                        <button class="pixai-tag-chip action-chip" id="pixai-optimize-btn">⚡ 프롬프트 2D 애니 최적화</button>
+                    </div>
+                </div>
+
                 <div>
                     <div class="tag-group-title">📐 Aspect Ratio (1클릭 변경)</div>
                     <div class="tag-container">
@@ -345,28 +364,34 @@
                 <div>
                     <div class="tag-group-title">🌟 Quality Boost</div>
                     <div class="tag-container">
-                        <span class="pixai-tag-chip" data-tag="masterpiece, best quality">✨ Masterpiece</span>
-                        <span class="pixai-tag-chip" data-tag="ultra-detailed, sharp focus">🔍 Sharp Focus</span>
-                        <span class="pixai-tag-chip" data-tag="beautiful detailed eyes">👁️ Detailed Eyes</span>
-                        <span class="pixai-tag-chip" data-tag="mrg style">🎨 MRG Style</span>
-                        <span class="pixai-tag-chip" data-tag="anime screencap, cinematic lighting">🎬 Cinematic</span>
+                        <span class="pixai-tag-chip" data-tag="2D anime illustration, cell shaded, clean outlines">🎨 2D Anime Cell</span>
+                        <span class="pixai-tag-chip" data-tag="masterpiece, high-end Japanese anime key visual">👑 Key Visual</span>
+                        <span class="pixai-tag-chip" data-tag="beautiful sparkling detailed anime eyes">👁️ Anime Eyes</span>
+                        <span class="pixai-tag-chip" data-tag="vibrant vivid colors, dynamic floating pose">💫 Dynamic</span>
                     </div>
                 </div>
 
                 <div>
-                    <div class="tag-group-title">🎀 Anime & Presets</div>
+                    <div class="tag-group-title">🎀 Anime Presets</div>
                     <div class="tag-container">
+                        <span class="pixai-tag-chip" data-tag="character: Surtr_(arknights), copyright: arknights, red hair, horns, black dress, magma">Surtr (명일방주)</span>
+                        <span class="pixai-tag-chip" data-tag="character: hatsune_miku, copyright: vocaloid, rabbit hole, full body, mrg style">Miku Rabbit Hole</span>
                         <span class="pixai-tag-chip" data-tag="zero two (darling in the franxx), horns, military uniform">Zero Two</span>
-                        <span class="pixai-tag-chip" data-tag="hatsune miku, vocaloid, rabbit hole, full body">Miku Rabbit Hole</span>
-                        <span class="pixai-tag-chip" data-tag="1girl, solo, beautiful face">1girl Solo</span>
-                        <span class="pixai-tag-chip" data-tag="cyberpunk city, neon lights">Cyberpunk</span>
                     </div>
                 </div>
 
-                <div class="theme-toggle-row">
-                    <span>🎨 PixAI Theme Style</span>
+                <div class="toggle-row">
+                    <span>⚡ 자동 단부루 변환 (Auto-Optimize)</span>
                     <label style="cursor:pointer; display:flex; align-items:center; gap:4px;">
-                        <input type="checkbox" id="pixai-theme-checkbox" style="cursor:pointer;" checked />
+                        <input type="checkbox" id="pixai-auto-opt-checkbox" checked />
+                        <span id="pixai-auto-opt-label" style="font-weight:600; color:#ec4899;">ON</span>
+                    </label>
+                </div>
+
+                <div class="toggle-row">
+                    <span>🎨 PixAI 네온 테마</span>
+                    <label style="cursor:pointer; display:flex; align-items:center; gap:4px;">
+                        <input type="checkbox" id="pixai-theme-checkbox" checked />
                         <span id="pixai-theme-label" style="font-weight:600; color:#c084fc;">ON</span>
                     </label>
                 </div>
@@ -387,7 +412,10 @@
         collapseBtn.addEventListener('click', toggleCollapse);
         headerTitle.addEventListener('click', toggleCollapse);
 
-        // 태그 클릭 이벤트
+        // 프롬프트 최적화 버튼
+        widget.querySelector('#pixai-optimize-btn').addEventListener('click', applyPromptOptimization);
+
+        // 태그 칩 클릭
         widget.querySelectorAll('.pixai-tag-chip[data-tag]').forEach(chip => {
             chip.addEventListener('click', () => {
                 const tag = chip.getAttribute('data-tag');
@@ -395,7 +423,7 @@
             });
         });
 
-        // 비율 버튼 클릭 이벤트
+        // 비율 버튼 클릭
         widget.querySelectorAll('.aspect-chip[data-aspect]').forEach(chip => {
             chip.addEventListener('click', () => {
                 const aspect = chip.getAttribute('data-aspect');
@@ -403,13 +431,27 @@
             });
         });
 
-        // 테마 토글 체크박스
+        // 자동 최적화 토글
+        const autoOptCheckbox = widget.querySelector('#pixai-auto-opt-checkbox');
+        const autoOptLabel = widget.querySelector('#pixai-auto-opt-label');
+        const isAutoOpt = localStorage.getItem(STORAGE_KEY_OPTIMIZE) !== 'false';
+        autoOptCheckbox.checked = isAutoOpt;
+        autoOptLabel.textContent = isAutoOpt ? 'ON' : 'OFF';
+        autoOptLabel.style.color = isAutoOpt ? '#ec4899' : '#9d8ec2';
+
+        autoOptCheckbox.addEventListener('change', () => {
+            const enabled = autoOptCheckbox.checked;
+            autoOptLabel.textContent = enabled ? 'ON' : 'OFF';
+            autoOptLabel.style.color = enabled ? '#ec4899' : '#9d8ec2';
+            localStorage.setItem(STORAGE_KEY_OPTIMIZE, enabled ? 'true' : 'false');
+        });
+
+        // 테마 토글
         const themeCheckbox = widget.querySelector('#pixai-theme-checkbox');
         const themeLabel = widget.querySelector('#pixai-theme-label');
-        const isThemeEnabled = localStorage.getItem(STORAGE_KEY_THEME) !== 'false'; // 기본 ON
-
-        themeCheckbox.checked = isThemeEnabled;
-        if (isThemeEnabled) {
+        const isTheme = localStorage.getItem(STORAGE_KEY_THEME) !== 'false';
+        themeCheckbox.checked = isTheme;
+        if (isTheme) {
             document.body.classList.add('pixai-theme');
             themeLabel.textContent = 'ON';
             themeLabel.style.color = '#c084fc';
@@ -418,7 +460,6 @@
             themeLabel.textContent = 'OFF';
             themeLabel.style.color = '#9d8ec2';
         }
-
         themeCheckbox.addEventListener('change', () => {
             if (themeCheckbox.checked) {
                 document.body.classList.add('pixai-theme');
@@ -434,16 +475,36 @@
         });
     }
 
-    // ==========================================
-    // 4. 초기화 및 감시
-    // ==========================================
+    // 전송 버튼 가로채기 (자동 단부루 태그 최적화가 켜져 있을 때)
+    function attachSubmitInterceptor() {
+        const submitBtn = document.querySelector('[aria-label="생성 시작"]') || document.querySelector('.generate-icon-button');
+        if (!submitBtn || submitBtn.__pixaiHooked) return;
+        submitBtn.__pixaiHooked = true;
+
+        submitBtn.addEventListener('mousedown', () => {
+            if (localStorage.getItem(STORAGE_KEY_OPTIMIZE) === 'false') return;
+            const editor = document.querySelector('.ProseMirror');
+            if (!editor) return;
+            const text = editor.innerText.trim();
+            // character: 또는 copyright: 가 포함되어 있으면 자동 변환
+            if (text.includes('character:') || text.includes('copyright:') || text.includes('mrg style')) {
+                const optimized = optimizeDanbooruPrompt(text);
+                editor.focus();
+                document.execCommand('selectAll', false, null);
+                document.execCommand('delete', false, null);
+                document.execCommand('insertText', false, optimized);
+                editor.dispatchEvent(new Event('input', { bubbles: true }));
+            }
+        }, true);
+    }
+
     function init() {
         injectStyle();
-        // 기본적으로 PixAI 테마 활성화
         if (localStorage.getItem(STORAGE_KEY_THEME) !== 'false' && document.body) {
             document.body.classList.add('pixai-theme');
         }
         createHelperWidget();
+        attachSubmitInterceptor();
     }
 
     init();
@@ -462,4 +523,7 @@
             }
         }
     });
+
+    // 전역 유틸 노출 (MCP 및 콘솔용)
+    window.__flowOptimizeDanbooruPrompt = optimizeDanbooruPrompt;
 })();
