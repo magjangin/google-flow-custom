@@ -1,23 +1,22 @@
 # google flow custom — 인수인계 문서 (AGENTS.md)
 
-> 갱신일: 2026-11-25. `youtube studio custom`(GitHub `youtube-studio-tool`)과 같은 구조로 만든 Google Flow 전용 WebView2 뷰어 & PixAI 에디션.
+> 갱신일: 2026-11-25. `youtube studio custom`(GitHub `youtube-studio-tool`)과 같은 구조로 만든 Google Flow 전용 WebView2 뷰어.
 
 ## 0. 프로젝트 개요
-- **무엇인가:** Google Flow(`https://flow.google.com/`)를 독립 창으로 띄우는 Avalonia WebView 앱(net10). 사용자 스크립트(`Scripts/flow-custom.js`)를 문서 생성 시점에 주입하여 **PixAI 스타일 애니메/사이버 다크 네온 테마 및 퀵 프롬프트/비율 헬퍼 위젯** 제공.
-- **MCP 연동:** `mcp/index.mjs`에 Antigravity/Claude Code용 MCP 서버 내장(`google-flow-custom`). Antigravity 쿼터 보존 또는 자동화 시 CDP(`--remote-debugging-port=9334`)를 통해 에이전트가 직접 Flow를 조종하여 프롬프트 입력, 16:9 비율 변경, 소재 업로드, 자동 생성 및 다운로드 파이프라인 수행.
+- **무엇인가:** Google Flow(`https://flow.google.com/`)를 독립 창으로 띄우는 Avalonia WebView 앱(net10). 사용자 스크립트(`Scripts/flow-custom.js`)를 문서 생성 시점에 주입.
+- **MCP 연동:** `mcp/index.mjs`에 Antigravity/Claude Code용 MCP 서버 내장(`google-flow-custom`). CDP(`--remote-debugging-port=9334`)를 통해 에이전트가 직접 Flow를 조종하여 프롬프트 입력, 16:9 와이드 비율 생성, 소재 업로드, 자동 생성 및 다운로드 파이프라인 수행.
 - **종류:** 게임 모드가 아닌 앱/도구 → 게임 버전 고정(Build ID/DepotDownloader/.acf)과 Mono/Il2Cpp 백엔드는 **해당 없음**.
 - **원격 저장소:** `origin` = https://github.com/magjangin/google-flow-custom (공개, `main`), `local` = `H:\local-repos\google flow custom.git` (로컬 백업 bare 레포). 커밋 후 두 곳 모두 푸시할 것.
 - **기술 스택:** .NET 10, Avalonia 12.0.5, `Avalonia.Controls.WebView` 12.0.1, `Microsoft.Web.WebView2` 1.0.3124.44.
 
 ## 1. 검증 상태 (2026-11-25 실측)
 - **로그인 및 작업 화면:** 실제 Google 로그인 세션 유지 상태에서 Flow 프로젝트 생성 및 작업 화면 접근 정상 작동 확인.
-- **16:9 와이드 이미지 생성:** Nano Banana 2.1 모델로 16:9 비율(1376×768 해상도) 이미지 2장 동시 생성 실측 완료 (Zero Two 및 Hatsune Miku Rabbit Hole 고화질 일러스트).
+- **16:9 와이드 이미지 생성:** Nano Banana 2.1 모델로 16:9 비율(1376×768 해상도) 이미지 2장 동시 생성 실측 완료 (Zero Two, Hatsune Miku, Kasane Teto).
 - **자동 다운로드 파이프라인:** 웹 상에서 fetch -> Blob 생성 -> `%USERPROFILE%\Downloads\GoogleFlow_Downloads`로 자동 수집 및 MCP `flow_get_downloads` 연동 검증.
-- **PixAI Edition 기능 검증:**
-  - `flow-custom.js`: 딥 바이올렛/네온 다크 테마(CSS), 카드 호버 네온 글로우, 슬림 스크롤바.
-  - Danbooru/PixAI 태그 2D 원화 변환 엔진: `character: Surtr_(arknights), copyright: arknights` 및 `mrg style`, `rabbit hole` 등 단부루 메타 태그를 감지하여 100% 2D 일본 애니메이션 셀화(Key visual, Clean outlines, Cell shaded) 프롬프트로 전처리/변환.
-  - PixAI Studio Helper 위젯: 1클릭 16:9/9:16/1:1/4:3 비율 변경, Quality Boost 태그, 애니메 프리셋, 단부루 자동 최적화 스위치, 테마 ON/OFF 스위치, `Alt + P` 단축키 토글.
-  - MCP `handleFlowClick` / `handleFlowType`: Angular/ProseMirror 대응 물리 마우스 이벤트 및 `insertText` 주입, `autoOptimize: true`, `submit: true` 지원.
+- **MCP 제어 검증:**
+  - `handleFlowClick`: Angular Material Button 및 ProseMirror 대응 물리 마우스 이벤트(`Input.dispatchMouseEvent`) 중심 좌표 클릭 성공.
+  - `handleFlowType`: ProseMirror `insertText` 주입 및 `submit: true` 연동 정상 동작.
+  - `handleFlowUploadMedia`: CDP `DOM.setFileInputFiles` 기반 다중 파일 업로드 지원.
 
 ## 2. 설계 의도 (Rationale)
 - **`GoogleFlowWebView.cs`에 Flow 관련 동작을 모으고 `MainWindow`는 연결만:** youtube studio custom의 `YoutubeStudioWebView`와 같은 분리.
@@ -30,7 +29,7 @@
 ## 3. 핵심 파일
 - `google flow custom/GoogleFlowWebView.cs` — 환경(DevTools·프로필), `ConfigureCoreAsync`(다운로드 폴더 + 스크립트 등록), 2차 주입
 - `google flow custom/MainWindow.axaml(.cs)` — `NativeWebView` 이벤트 연결
-- `google flow custom/Scripts/flow-custom.js` — PixAI 스타일 테마 및 퀵 프롬프트 헬퍼 위젯 (임베디드 리소스)
+- `google flow custom/Scripts/flow-custom.js` — 임베디드 리소스로 들어가는 사용자 CSS/JS
 - `google flow custom/Assets/icon.png|ico` — 앱 아이콘
 - `mcp/index.mjs` — Antigravity/Claude Code 연동용 MCP 서버 (CDP 원격 제어: 실행, 상태, 물리 클릭, 프롬프트 입력/제출, 미디어 업로드, 다운로드 수집)
 

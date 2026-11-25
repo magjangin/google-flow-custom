@@ -262,30 +262,12 @@ async function handleFlowClick(args) {
 }
 
 async function handleFlowType(args) {
-  const { selector, text, submit = false, autoOptimize = true } = args;
+  const { selector, text, submit = false } = args;
   if (!text) throw new Error("text 매개변수가 필요합니다.");
   const ws = await getActiveWs();
   
-  // Danbooru 태그(character:, copyright:, mrg style 등) 감지 시 2D 애니 원화 최적화 변환 적용
   const script = `(() => {
     let inputStr = ${JSON.stringify(text)};
-    if (${autoOptimize} && (inputStr.includes('character:') || inputStr.includes('copyright:') || inputStr.includes('mrg style') || inputStr.includes('rabbit hole') || inputStr.includes('mesmerizer') || inputStr.includes('kasane_teto'))) {
-      if (typeof window.__flowOptimizeDanbooruPrompt === 'function') {
-        inputStr = window.__flowOptimizeDanbooruPrompt(inputStr);
-      } else {
-        // 내장 폴백 변환기
-        let charMatch = inputStr.match(/character:\\s*([^,\\n]+)/i);
-        let copyMatch = inputStr.match(/copyright:\\s*([^,\\n]+)/i);
-        let char = charMatch ? charMatch[1].replace(/\\([^)]+\\)/g, '').replace(/_/g, ' ').trim() : '';
-        let copy = copyMatch ? copyMatch[1].replace(/_/g, ' ').trim() : '';
-        let rest = inputStr.replace(/character:\\s*[^,\\n]+/gi, '').replace(/copyright:\\s*[^,\\n]+/gi, '').replace(/^[,\\s]+|[,\\s]+$/g, '');
-        rest = rest.replace(/\\bmrg style\\b/gi, 'Rabbit Hole MV anime key visual style').replace(/\\brabbit hole\\b/gi, 'Rabbit Hole theme, vibrant hot pink circular spotlight, bunny girl, fishnet stockings');
-        rest = rest.replace(/\\bmesmerizer\\b/gi, 'Mesmerizer music video art style by channelcaststation, sunny blue sky, smiling clouds, confetti, golden starburst');
-        rest = rest.replace(/\\bkasane_teto\\b/gi, 'Kasane Teto, signature red twin-drill pigtails, train attendant cap with smiley badge, yellow gloves');
-        inputStr = '2D anime illustration, masterpiece, high-end Japanese anime key visual, clean sharp outlines, cell shaded' + (char ? ', ' + char : '') + (copy ? ' from ' + copy : '') + ', ' + rest;
-      }
-    }
-
     let el = ${selector ? `document.querySelector(${JSON.stringify(selector)})` : `document.activeElement`};
     if (!el || (el.tagName !== 'INPUT' && el.tagName !== 'TEXTAREA' && !el.isContentEditable)) {
       const inputs = Array.from(document.querySelectorAll('.ProseMirror, textarea, input[type="text"], [contenteditable="true"]'));
@@ -304,7 +286,7 @@ async function handleFlowType(args) {
       el.dispatchEvent(new Event('input', { bubbles: true }));
       el.dispatchEvent(new Event('change', { bubbles: true }));
     }
-    return { success: true, original: ${JSON.stringify(text)}, appliedPrompt: inputStr };
+    return { success: true, value: inputStr };
   })()`;
 
   const res = await sendCdp(ws, "Runtime.evaluate", {
