@@ -47,9 +47,11 @@
         // 3. 콤마 및 잔여 공백 정리
         text = text.replace(/^[,\s]+|[,\s]+$/g, '').replace(/,\s*,/g, ',');
 
-        // 4. 특수 태그 맵핑 (mrg style, rabbit hole 등)
+        // 4. 특수 태그 맵핑 (mrg style, rabbit hole, mesmerizer 등)
         text = text.replace(/\bmrg style\b/gi, 'Rabbit Hole MV anime key visual style, caststation art style');
         text = text.replace(/\brabbit hole\b/gi, 'Rabbit Hole theme, vibrant hot pink circular spotlight backdrop, bunny girl outfit with heart cut-out, white bunny ears headband, fishnet stockings');
+        text = text.replace(/\bmesmerizer\b/gi, 'Mesmerizer music video art style by channelcaststation, bright sunny blue sky, smiling clouds, confetti, golden starburst');
+        text = text.replace(/\bkasane_teto\b/gi, 'Kasane Teto, signature red twin-drill pigtails, train attendant cap with smiley face badge, yellow gloves');
 
         // 5. 핵심 2D 애니메이션 원화 품질/작화 앵커 구축
         let prefix = '2D anime illustration, masterpiece, high-end Japanese anime key visual, clean sharp lineart, cell shaded anime art';
@@ -374,8 +376,9 @@
                 <div>
                     <div class="tag-group-title">🎀 Anime Presets</div>
                     <div class="tag-container">
-                        <span class="pixai-tag-chip" data-tag="character: Surtr_(arknights), copyright: arknights, red hair, horns, black dress, magma">Surtr (명일방주)</span>
+                        <span class="pixai-tag-chip" data-tag="character: kasane_teto, mesmerizer, red twin-drill pigtails, train attendant cap, yellow gloves, peace sign, smiling clouds">Teto (메스머라이저)</span>
                         <span class="pixai-tag-chip" data-tag="character: hatsune_miku, copyright: vocaloid, rabbit hole, full body, mrg style">Miku Rabbit Hole</span>
+                        <span class="pixai-tag-chip" data-tag="character: Surtr_(arknights), copyright: arknights, red hair, horns, black dress, magma">Surtr (명일방주)</span>
                         <span class="pixai-tag-chip" data-tag="zero two (darling in the franxx), horns, military uniform">Zero Two</span>
                     </div>
                 </div>
