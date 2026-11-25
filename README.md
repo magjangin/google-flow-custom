@@ -46,7 +46,8 @@
   - `flow_status`: 화면 상태, URL 및 로그인 여부 확인
   - `flow_type`: ProseMirror 에디터 호환 텍스트 입력 및 생성 시작(`submit: true`)
   - `flow_click`: Angular / Material Button 대응 물리 마우스 이벤트(`Input.dispatchMouseEvent`) 좌표 클릭
-  - `flow_upload_media`: Image-to-Image 합성을 위한 로컬 소재 일괄 업로드
+  - `flow_upload_media`: Image-to-Image 합성을 위한 로컬 소재 DataTransfer 일괄 업로드
+  - `flow_generate_typography`: 유튜브 썸네일 & 리듬게임 커스텀 차트 전용 2단 와이드 네온 타이포그래피 자동 생성
   - `flow_screenshot`: 실시간 생성 상태 모니터링 캡처
   - `flow_get_downloads`: 생성물 자동 수집 및 로컬 동기화
 - 🛠️ **DevTools(F12) 내장**: 우클릭 "검사" 또는 F12 키로 언제든 실제 DOM을 열람하고 디버깅할 수 있습니다.

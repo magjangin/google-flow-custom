@@ -308,7 +308,7 @@ async function handleFlowType(args) {
 }
 
 async function handleFlowUploadMedia(args) {
-  const { files, selector = 'input[type="file"]' } = args;
+  const { files } = args;
   if (!files || !Array.isArray(files) || files.length === 0) {
     throw new Error("files 매개변수(파일 경로 배열)가 필요합니다.");
   }
@@ -321,37 +321,44 @@ async function handleFlowUploadMedia(args) {
   }
 
   const ws = await getActiveWs();
-  await sendCdp(ws, "DOM.enable");
-  const doc = await sendCdp(ws, "DOM.getDocument", { depth: -1 });
+  const { readFileSync } = await import("node:fs");
+  const { basename, extname } = await import("node:path");
 
-  let queryRes;
-  try {
-    queryRes = await sendCdp(ws, "DOM.querySelector", {
-      nodeId: doc.root.nodeId,
-      selector
-    });
-  } catch (err) {
-    throw new Error(`파일 입력 요소를 찾는 중 오류 발생 (${selector}): ${err.message}`);
-  }
-
-  if (!queryRes || !queryRes.nodeId || queryRes.nodeId === 0) {
-    throw new Error(`화면에서 파일 입력 요소(${selector})를 찾을 수 없습니다. 미디어 추가 버튼을 먼저 클릭해야 할 수 있습니다.`);
-  }
-
-  await sendCdp(ws, "DOM.setFileInputFiles", {
-    nodeId: queryRes.nodeId,
-    files
+  // 파일을 Base64로 인코딩하여 DataTransfer 드래그앤드롭으로 안정적 주입
+  const fileDataList = files.map(filePath => {
+    const buf = readFileSync(filePath);
+    const b64 = buf.toString("base64");
+    const name = basename(filePath);
+    const ext = extname(filePath).toLowerCase();
+    const mime = ext === ".png" ? "image/png" : ext === ".webp" ? "image/webp" : "image/jpeg";
+    return { name, mime, b64 };
   });
 
-  // input/change 이벤트 트리거
-  await sendCdp(ws, "Runtime.evaluate", {
-    expression: `(() => {
-      const el = document.querySelector(${JSON.stringify(selector)});
-      if (el) {
-        el.dispatchEvent(new Event('change', { bubbles: true }));
-        el.dispatchEvent(new Event('input', { bubbles: true }));
+  const uploadScript = `(async () => {
+    const filesToDrop = ${JSON.stringify(fileDataList)};
+    const dt = new DataTransfer();
+    for (const f of filesToDrop) {
+      const byteChars = atob(f.b64);
+      const byteNumbers = new Array(byteChars.length);
+      for (let i = 0; i < byteChars.length; i++) {
+        byteNumbers[i] = byteChars.charCodeAt(i);
       }
-    })()`
+      const byteArray = new Uint8Array(byteNumbers);
+      const file = new File([byteArray], f.name, { type: f.mime });
+      dt.items.add(file);
+    }
+
+    const dropTarget = document.querySelector('.grid-area-wrapper') || document.querySelector('main') || document.body;
+    dropTarget.dispatchEvent(new DragEvent('dragenter', { dataTransfer: dt, bubbles: true }));
+    dropTarget.dispatchEvent(new DragEvent('dragover', { dataTransfer: dt, bubbles: true }));
+    dropTarget.dispatchEvent(new DragEvent('drop', { dataTransfer: dt, bubbles: true }));
+    return { success: true, count: filesToDrop.length, target: dropTarget.className || dropTarget.tagName };
+  })()`;
+
+  const dropRes = await sendCdp(ws, "Runtime.evaluate", {
+    expression: uploadScript,
+    returnByValue: true,
+    awaitPromise: true
   });
 
   return {
@@ -359,9 +366,55 @@ async function handleFlowUploadMedia(args) {
       type: "text",
       text: JSON.stringify({
         status: "success",
-        message: "미디어 파일이 성공적으로 업로드(주입)되었습니다.",
+        message: "미디어 파일이 DataTransfer 드래그앤드롭 파이프라인으로 성공적으로 업로드되었습니다.",
         uploadedFiles: files,
-        targetSelector: selector
+        detail: dropRes?.result?.value
+      }, null, 2)
+    }]
+  };
+}
+
+/**
+ * 유튜브 썸네일 & 리듬게임 커스텀 차트용 알잘딱 타이포그래피 생성 도구
+ * (하단 와이드 2단 배치, 네온 아우터 글로우, 이중 외곽선, 네거티브 스페이스 심볼 음각)
+ */
+async function handleFlowGenerateTypography(args) {
+  const {
+    title,
+    subtitle = "CUSTOM CHART",
+    themeColor = "Crimson Red / Blood Red (#ff2244)",
+    symbolIdea = "apple silhouette with stem and leaf in counter holes of letters A and P",
+    style = "heavy bold textured lettering with intense neon outer glow, dark embossed bevel and double borders",
+    placement = "lower wide center foreground across the bottom",
+    submit = true
+  } = args;
+
+  if (!title) throw new Error("title(곡 또는 작품 메인 제목) 매개변수가 필요합니다.");
+
+  const prompt = [
+    `Keep this exact image, character face, pose, outfit, and background composition completely 100% intact and unchanged.`,
+    `Do not alter or redraw the girl/character or the shrine/background.`,
+    `Overlay an ultra high-quality, professional rhythm game / YouTube thumbnail typography title at the ${placement}.`,
+    `Typography text arrangement:`,
+    `- Line 1 (Main Title): "${title.toUpperCase()}" in giant heavy bold display font with intense ${themeColor} neon outer glow, dark bevel finish, bold dual outline borders, and subtle inner texture.`,
+    `- Negative space detail: Incorporate clever ${symbolIdea} inside the closed counter loops/holes of the letters.`,
+    `- Line 2 (Subtitle): "${subtitle.toUpperCase()}" placed directly underneath in matching compact bold font with red neon rim glow and dark fill.`,
+    `The typography is placed solidly in front, creating rich depth and cinematic rhythm game jacket / YouTube thumbnail poster appeal. Highly legible, sharp, iconic custom chart title design.`
+  ].join(" ");
+
+  const typeRes = await handleFlowType({ text: prompt, submit });
+  return {
+    content: [{
+      type: "text",
+      text: JSON.stringify({
+        status: "success",
+        message: "알잘딱 타이포그래피 프롬프트가 주입되었습니다.",
+        title,
+        subtitle,
+        themeColor,
+        symbolIdea,
+        generatedPrompt: prompt,
+        flowTypeResult: typeRes
       }, null, 2)
     }]
   };
@@ -486,7 +539,7 @@ const TOOLS = [
   },
   {
     name: "flow_upload_media",
-    description: "Google Flow 웹 화면에 로컬 이미지 파일들을 업로드(미디어/소재 추가)합니다. Image-to-Image 참조 합성을 위해 기준 배경 및 대상 썸네일을 등록할 때 사용합니다.",
+    description: "Google Flow 웹 화면에 로컬 이미지 파일들을 업로드(미디어/소재 추가)합니다. DataTransfer 기반 드래그앤드롭 파이프라인으로 안전하게 주입합니다.",
     inputSchema: {
       type: "object",
       properties: {
@@ -494,13 +547,25 @@ const TOOLS = [
           type: "array",
           items: { type: "string" },
           description: "업로드할 로컬 이미지 파일의 절대 경로 배열"
-        },
-        selector: {
-          type: "string",
-          description: "파일 입력 input 요소의 CSS 선택자 (기본값: input[type=\"file\"])"
         }
       },
       required: ["files"]
+    }
+  },
+  {
+    name: "flow_generate_typography",
+    description: "유튜브 썸네일 및 리듬게임 커스텀 차트용 알잘딱 타이포그래피(2단 와이드 하단 배치, 네온 아우터 글로우, 이중 외곽선, 네거티브 스페이스 심볼 음각)를 주입하여 생성합니다.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        title: { type: "string", description: "메인 곡 또는 작품 제목 (예: BAD APPLE, MESMERIZER, RABBIT HOLE)" },
+        subtitle: { type: "string", description: "서브 타이틀 문구 (기본값: CUSTOM CHART)" },
+        themeColor: { type: "string", description: "테마 네온 발광 색상 (예: Crimson Red, Electric Cyan, Hot Pink)" },
+        symbolIdea: { type: "string", description: "글자 카운터(구멍) 안에 들어갈 알잘딱 심볼 아이디어 (예: apple silhouette with stem, bunny silhouette, star icon)" },
+        placement: { type: "string", description: "배치 위치 (기본값: lower wide center foreground across the bottom)" },
+        submit: { type: "boolean", description: "입력 후 생성 시작 버튼을 자동 클릭할지 여부 (기본값: true)" }
+      },
+      required: ["title"]
     }
   },
   {
@@ -586,6 +651,7 @@ async function handleRpc(req) {
         case "flow_click": res = await handleFlowClick(args); break;
         case "flow_type": res = await handleFlowType(args); break;
         case "flow_upload_media": res = await handleFlowUploadMedia(args); break;
+        case "flow_generate_typography": res = await handleFlowGenerateTypography(args); break;
         case "flow_screenshot": res = await handleFlowScreenshot(args); break;
         case "flow_get_downloads": res = await handleFlowGetDownloads(args); break;
         default:

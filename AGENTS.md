@@ -4,7 +4,7 @@
 
 ## 0. 프로젝트 개요
 - **무엇인가:** Google Flow(`https://flow.google.com/`)를 독립 창으로 띄우는 Avalonia WebView 앱(net10). 사용자 스크립트(`Scripts/flow-custom.js`)를 문서 생성 시점에 주입.
-- **MCP 연동:** `mcp/index.mjs`에 Antigravity/Claude Code용 MCP 서버 내장(`google-flow-custom`). CDP(`--remote-debugging-port=9334`)를 통해 에이전트가 직접 Flow를 조종하여 프롬프트 입력, 16:9 와이드 비율 생성, 소재 업로드, 자동 생성 및 다운로드 파이프라인 수행.
+- **MCP 연동:** `mcp/index.mjs`에 Antigravity/Claude Code용 MCP 서버 내장(`google-flow-custom`). CDP(`--remote-debugging-port=9334`)를 통해 에이전트가 직접 Flow를 조종하여 프롬프트 입력, 16:9 와이드 비율 생성, 소재 DataTransfer 업로드, 알잘딱 타이포그래피 생성 및 다운로드 파이프라인 수행.
 - **종류:** 게임 모드가 아닌 앱/도구 → 게임 버전 고정(Build ID/DepotDownloader/.acf)과 Mono/Il2Cpp 백엔드는 **해당 없음**.
 - **원격 저장소:** `origin` = https://github.com/magjangin/google-flow-custom (공개, `main`), `local` = `H:\local-repos\google flow custom.git` (로컬 백업 bare 레포). 커밋 후 두 곳 모두 푸시할 것.
 - **기술 스택:** .NET 10, Avalonia 12.0.5, `Avalonia.Controls.WebView` 12.0.1, `Microsoft.Web.WebView2` 1.0.3124.44.
@@ -16,7 +16,8 @@
 - **MCP 제어 검증:**
   - `handleFlowClick`: Angular Material Button 및 ProseMirror 대응 물리 마우스 이벤트(`Input.dispatchMouseEvent`) 중심 좌표 클릭 성공.
   - `handleFlowType`: ProseMirror `insertText` 주입 및 `submit: true` 연동 정상 동작.
-  - `handleFlowUploadMedia`: CDP `DOM.setFileInputFiles` 기반 다중 파일 업로드 지원.
+  - `handleFlowUploadMedia`: CDP DataTransfer(`dragenter`, `dragover`, `drop`) 기반 로컬 다중 파일 업로드 지원.
+  - `handleFlowGenerateTypography`: 유튜브 썸네일 & 리듬게임 커스텀 차트 전용 알잘딱 타이포그래피(하단 와이드 2열 배치, 네온 아우터 글로우, 이중 외곽선, 네거티브 스페이스 심볼 음각) 생성 자동화.
 
 ## 2. 설계 의도 (Rationale)
 - **`GoogleFlowWebView.cs`에 Flow 관련 동작을 모으고 `MainWindow`는 연결만:** youtube studio custom의 `YoutubeStudioWebView`와 같은 분리.
@@ -36,7 +37,17 @@
 ## 4. 합성 품질 이슈 및 Image-to-Image 참조 필수 원칙
 - **문제 진단:** Text-to-Image(순수 텍스트 프롬프트)만 주입할 경우 모델이 텍스트 설명만 보고 캐릭터를 처음부터 다시 그려 원작의 고유 선화·그림체·채색 스타일이 왜곡되는 이질감 발생.
 - **해결 방안:** 기준 이미지와 대상 썸네일 2장을 **Flow 프로젝트의 '미디어 업로드(소재 추가)'로 등록**한 뒤 참조 소재로 지정하여 생성해야 1:1 원화 보존 품질 달성 가능.
-- **MCP 지원:** `flow_upload_media` 도구를 통해 CDP(`DOM.setFileInputFiles`)로 Flow 웹 화면의 `<input type="file">`에 로컬 이미지 2장을 직접 업로드하고 프롬프트 참조로 연결 가능.
+- **MCP 지원:** `flow_upload_media` 도구를 통해 CDP DataTransfer 드래그앤드롭 이벤트로 Flow 웹 화면에 로컬 이미지 2장을 직접 업로드하고 프롬프트 참조로 연결 가능.
+
+## 5. 썸네일 알잘딱 타이포그래피 파이프라인 (2026-11-25 실측 정립)
+- **표준 레이아웃:** 16:9 와이드 기준 **하단 중앙 와이드 2단 배치 (`placement: "lower wide center foreground across the bottom"`)**.
+  - **1열 (메인 타이틀):** 곡명/작품명 (예: `BAD APPLE`) - 대형 볼드 디스플레이 폰트 + 테마 네온 아우터 글로우 + 2중 외곽선 스트로크 + 엠보싱 음영.
+  - **2열 (서브 타이틀):** `CUSTOM CHART` (화영왕 채널 커스텀 차트 아이덴티티) - 하단에 컴팩트 볼드로 안착.
+  - **네거티브 스페이스 음각 (알잘딱 센스):** `A`, `P`, `B`, `O`, `R` 등 닫힌 루프(카운터 공간) 내부에 꼭지와 잎사귀가 달린 미니 사과/토끼/별 등 테마 심볼 실루엣을 음각으로 정교하게 렌더링.
+- **에이전트 제안 워크플로:**
+  1. 두 이미지 합성 완료 후 1차 심사 통과.
+  2. 에이전트가 *"이 완성된 그림 위에 타이포그래피(곡 제목, 캐릭터 로고 등)를 올려드릴까요?"* 선택 제안.
+  3. 사용자가 승인하면 `flow_generate_typography` 도구로 원본 구도/캐릭터 100% 보존 상태에서 타이포그래피 주입.
 
 ## 5. 시도했다가 버린 것 / 주의 (Dead Ends)
 - **`labs.google/fx/tools/flow`:** 예전 Flow 주소. 지금은 `https://flow.google.com/`로 308 리다이렉트된다. 시작 URL은 새 주소를 직접 쓴다.
