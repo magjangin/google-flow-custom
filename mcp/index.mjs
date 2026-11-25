@@ -376,7 +376,7 @@ async function handleFlowUploadMedia(args) {
 
 /**
  * 유튜브 썸네일 & 리듬게임 커스텀 차트용 알잘딱 타이포그래피 생성 도구
- * (하단 와이드 2단 배치, 네온 아우터 글로우, 이중 외곽선, 네거티브 스페이스 심볼 음각)
+ * (하단 와이드 2단 배치, 네온 아우터 글로우, 이중 외곽선, 네거티브 스페이스 심볼 음각 및 장르/곡 테마 연출)
  */
 async function handleFlowGenerateTypography(args) {
   const {
@@ -384,35 +384,40 @@ async function handleFlowGenerateTypography(args) {
     subtitle = "CUSTOM CHART",
     themeColor = "Crimson Red / Blood Red (#ff2244)",
     symbolIdea = "apple silhouette with stem and leaf in counter holes of letters A and P",
-    style = "heavy bold textured lettering with intense neon outer glow, dark embossed bevel and double borders",
+    stylePrompt = "heavy bold textured lettering with intense neon outer glow, dark embossed bevel and double borders",
     placement = "lower wide center foreground across the bottom",
+    negativeSpaceTarget = "A, P, B, O, R",
+    inferenceReasoning = "",
     submit = true
   } = args;
 
   if (!title) throw new Error("title(곡 또는 작품 메인 제목) 매개변수가 필요합니다.");
 
-  const prompt = [
+  const promptParts = [
     `Keep this exact image, character face, pose, outfit, and background composition completely 100% intact and unchanged.`,
-    `Do not alter or redraw the girl/character or the shrine/background.`,
+    `Do not alter or redraw the girl/character or the background scene.`,
     `Overlay an ultra high-quality, professional rhythm game / YouTube thumbnail typography title at the ${placement}.`,
     `Typography text arrangement:`,
-    `- Line 1 (Main Title): "${title.toUpperCase()}" in giant heavy bold display font with intense ${themeColor} neon outer glow, dark bevel finish, bold dual outline borders, and subtle inner texture.`,
-    `- Negative space detail: Incorporate clever ${symbolIdea} inside the closed counter loops/holes of the letters.`,
-    `- Line 2 (Subtitle): "${subtitle.toUpperCase()}" placed directly underneath in matching compact bold font with red neon rim glow and dark fill.`,
+    `- Line 1 (Main Title): "${title.toUpperCase()}" designed in ${stylePrompt} with intense ${themeColor} neon outer glow, dark bevel finish, bold dual outline borders, and subtle thematic texture.`,
+    `- Negative space detail (Clever Counter Loop Art): Seamlessly carve ${symbolIdea} as crisp negative space silhouettes inside the closed counter loops/holes of the letters (${negativeSpaceTarget}).`,
+    `- Line 2 (Subtitle): "${subtitle.toUpperCase()}" placed directly underneath in matching compact bold font with themed neon rim glow and dark fill.`,
     `The typography is placed solidly in front, creating rich depth and cinematic rhythm game jacket / YouTube thumbnail poster appeal. Highly legible, sharp, iconic custom chart title design.`
-  ].join(" ");
+  ];
 
+  const prompt = promptParts.join(" ");
   const typeRes = await handleFlowType({ text: prompt, submit });
   return {
     content: [{
       type: "text",
       text: JSON.stringify({
         status: "success",
-        message: "알잘딱 타이포그래피 프롬프트가 주입되었습니다.",
+        message: "멀티모달 테마 추론 기반 알잘딱 타이포그래피 프롬프트가 주입되었습니다.",
         title,
         subtitle,
         themeColor,
         symbolIdea,
+        negativeSpaceTarget,
+        inferenceReasoning,
         generatedPrompt: prompt,
         flowTypeResult: typeRes
       }, null, 2)
@@ -554,15 +559,18 @@ const TOOLS = [
   },
   {
     name: "flow_generate_typography",
-    description: "유튜브 썸네일 및 리듬게임 커스텀 차트용 알잘딱 타이포그래피(2단 와이드 하단 배치, 네온 아우터 글로우, 이중 외곽선, 네거티브 스페이스 심볼 음각)를 주입하여 생성합니다.",
+    description: "유튜브 썸네일 및 리듬게임 커스텀 차트용 멀티모달 테마 추론 기반 알잘딱 타이포그래피(2단 와이드 하단 배치, 테마 질감/글로우, 네거티브 스페이스 심볼 음각)를 주입하여 생성합니다.",
     inputSchema: {
       type: "object",
       properties: {
-        title: { type: "string", description: "메인 곡 또는 작품 제목 (예: BAD APPLE, MESMERIZER, RABBIT HOLE)" },
+        title: { type: "string", description: "메인 곡 또는 작품 제목 (예: BAD APPLE, TETORIS, MESMERIZER)" },
         subtitle: { type: "string", description: "서브 타이틀 문구 (기본값: CUSTOM CHART)" },
-        themeColor: { type: "string", description: "테마 네온 발광 색상 (예: Crimson Red, Electric Cyan, Hot Pink)" },
-        symbolIdea: { type: "string", description: "글자 카운터(구멍) 안에 들어갈 알잘딱 심볼 아이디어 (예: apple silhouette with stem, bunny silhouette, star icon)" },
+        themeColor: { type: "string", description: "테마 네온 발광 색상 (예: Crimson Red, Retro Arcade Cyan/Purple, Acid Green)" },
+        symbolIdea: { type: "string", description: "글자 카운터(구멍) 안에 들어갈 테마 네거티브 스페이스 심볼 (예: apple silhouette with stem, falling tetramino tetromino block, bunny head silhouette)" },
+        stylePrompt: { type: "string", description: "폰트 장르/질감 프롬프트 (예: retro 8-bit arcade brick grid tetromino style, sharp graffiti lettering, glossy holographic cyber pop)" },
+        negativeSpaceTarget: { type: "string", description: "심볼이 음각될 대상 글자 (기본값: A, P, B, O, R)" },
         placement: { type: "string", description: "배치 위치 (기본값: lower wide center foreground across the bottom)" },
+        inferenceReasoning: { type: "string", description: "시각 분석 및 웹 검색을 통해 도출한 테마/심볼 선정 추론 이유" },
         submit: { type: "boolean", description: "입력 후 생성 시작 버튼을 자동 클릭할지 여부 (기본값: true)" }
       },
       required: ["title"]
