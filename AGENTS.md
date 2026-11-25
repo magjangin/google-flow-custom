@@ -17,7 +17,7 @@
   - `handleFlowClick`: Angular Material Button 및 ProseMirror 대응 물리 마우스 이벤트(`Input.dispatchMouseEvent`) 중심 좌표 클릭 성공.
   - `handleFlowType`: ProseMirror `insertText` 주입 및 `submit: true` 연동 정상 동작. 상세 편집 모드에서 `.ProseMirror` 최우선 타깃 탐색 적용.
   - `handleFlowUploadMedia`: CDP DataTransfer(`dragenter`, `dragover`, `drop`) 기반 로컬 다중 파일 업로드 지원.
-  - `handleFlowGenerateTypography`: 유튜브 썸네일 & 리듬게임 커스텀 차트 전용 알잘딱 타이포그래피(하단 와이드 2열 배치, 네온 아우터 글로우, 이중 외곽선, 네거티브 스페이스 심볼 음각) 생성 자동화. 카사네 테토 **「TETORIS」 × `CUSTOM CHART`** 썸네일 100% 원화 보존 실측 성공.
+  - `handleFlowGenerateTypography`: 유튜브 썸네일 & 리듬게임 커스텀 차트 전용 알잘딱 타이포그래피(하단 와이드 2열 배치, 네온 아우터 글로우, 이중 외곽선, 네거티브 스페이스 심볼 음각) 생성 자동화. 카사네 테토 **「TETORIS」**, 제로투 **「ZERO TWO」 × `CUSTOM CHART`** 썸네일 100% 원화 보존 실측 성공.
 
 ## 2. 설계 의도 (Rationale)
 - **`GoogleFlowWebView.cs`에 Flow 관련 동작을 모으고 `MainWindow`는 연결만:** youtube studio custom의 `YoutubeStudioWebView`와 같은 분리.
