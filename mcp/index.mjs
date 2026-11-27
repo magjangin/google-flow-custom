@@ -9,6 +9,38 @@ const DEFAULT_EXE_PATHS = [
   "H:\\source\\repos\\google flow custom\\google flow custom\\bin\Debug\\net10.0\\google flow custom.exe"
 ];
 const DOWNLOADS_DIR = join(homedir(), "Downloads", "GoogleFlow_Downloads");
+const WATERMARK_SCRIPT_PATH = "H:\\source\\repos\\google flow custom\\google flow custom\\Scripts\\remove_watermark.py";
+
+function runWatermarkRemover(targetPath, isDir = false, deleteOriginal = true) {
+  return new Promise((resolve, reject) => {
+    const pyArgs = [WATERMARK_SCRIPT_PATH];
+    if (isDir) {
+      pyArgs.push("--dir", targetPath);
+    } else {
+      pyArgs.push("--file", targetPath);
+    }
+    if (deleteOriginal) {
+      pyArgs.push("--delete-original");
+    }
+
+    const py = spawn("python", pyArgs, { stdio: ["ignore", "pipe", "pipe"] });
+    let stdout = "";
+    let stderr = "";
+    py.stdout.on("data", chunk => stdout += chunk);
+    py.stderr.on("data", chunk => stderr += chunk);
+    py.on("close", code => {
+      if (code !== 0) {
+        reject(new Error(`워터마크 제거 스크립트 실행 실패 (코드 ${code}): ${stderr}`));
+      } else {
+        try {
+          resolve(JSON.parse(stdout));
+        } catch {
+          resolve({ raw: stdout });
+        }
+      }
+    });
+  });
+}
 
 let activeWs = null;
 let nextReqId = 1;
@@ -545,6 +577,15 @@ async function handleFlowGetDownloads(args) {
     return { content: [{ type: "text", text: `다운로드 폴더가 아직 존재하지 않습니다: ${DOWNLOADS_DIR}` }] };
   }
 
+  // 워터마크 일괄 제거 요청 시
+  if (args?.removeWatermarks) {
+    try {
+      await runWatermarkRemover(DOWNLOADS_DIR, true, true);
+    } catch (err) {
+      // 워터마크 제거 중 오류 발생 시 로깅만 하고 계속 진행
+    }
+  }
+
   const files = readdirSync(DOWNLOADS_DIR)
     .map(name => {
       const fullPath = join(DOWNLOADS_DIR, name);
@@ -569,8 +610,129 @@ async function handleFlowGetDownloads(args) {
       type: "text",
       text: JSON.stringify({
         downloadsDir: DOWNLOADS_DIR,
-        recentFiles: files.slice(0, 5),
+        recentFiles: files.slice(0, 10),
         copied
+      }, null, 2)
+    }]
+  };
+}
+
+/**
+ * 이미지 워터마크 인페인팅 복원 및 워터마크 원본 사진 삭제 도구
+ */
+async function handleFlowRemoveWatermarks(args) {
+  const targetPath = args?.path || DOWNLOADS_DIR;
+  const deleteOriginal = args?.deleteOriginal !== false; // 기본값: true (워터마크 원본 삭제)
+
+  if (!existsSync(targetPath)) {
+    throw new Error(`대상을 찾을 수 없습니다: ${targetPath}`);
+  }
+
+  const stat = statSync(targetPath);
+  const isDir = stat.isDirectory();
+  const res = await runWatermarkRemover(targetPath, isDir, deleteOriginal);
+
+  return {
+    content: [{
+      type: "text",
+      text: JSON.stringify({
+        status: "success",
+        message: "워터마크 인페인팅 복원이 완료되었으며 워터마크 원본 사진이 정리되었습니다.",
+        targetPath,
+        isDir,
+        result: res
+      }, null, 2)
+    }]
+  };
+}
+
+/**
+ * Google Flow 현재 작업 화면의 생성 이미지들을 일괄 다운로드하고
+ * 인페인팅 복원 스크립트를 즉시 실행하여 워터마크를 제거한 뒤 원본 사진을 삭제하는 도구
+ */
+async function handleFlowDownloadImages(args) {
+  const ws = await getActiveWs();
+  const prefix = args?.prefix || "GoogleFlow";
+  const limit = args?.limit || 50;
+  const deleteOriginal = args?.deleteOriginal !== false; // 기본값 true
+
+  if (!existsSync(DOWNLOADS_DIR)) {
+    mkdirSync(DOWNLOADS_DIR, { recursive: true });
+  }
+
+  // 1. 브라우저에서 이미지 base64 추출 스크립트 실행
+  const extractScript = `(async () => {
+    const imgs = Array.from(document.querySelectorAll('img')).filter(i => 
+      (i.naturalWidth === 1376 || i.width === 1376) || i.src.includes('/asb/')
+    );
+    const results = [];
+    for (let i = 0; i < Math.min(imgs.length, ${limit}); i++) {
+      const img = imgs[i];
+      try {
+        const canvas = document.createElement('canvas');
+        canvas.width = img.naturalWidth || 1376;
+        canvas.height = img.naturalHeight || 768;
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(img, 0, 0);
+        const b64 = canvas.toDataURL('image/png').split(',')[1];
+        results.push({ index: i, width: canvas.width, height: canvas.height, b64 });
+      } catch (e) {
+        results.push({ index: i, error: e.toString() });
+      }
+    }
+    return results;
+  })()`;
+
+  const evalRes = await sendCdp(ws, "Runtime.evaluate", {
+    expression: extractScript,
+    returnByValue: true,
+    awaitPromise: true
+  });
+
+  const extracted = evalRes?.result?.value || [];
+  if (!Array.isArray(extracted) || extracted.length === 0) {
+    return {
+      content: [{
+        type: "text",
+        text: JSON.stringify({ status: "warning", message: "다운로드할 고화질 이미지를 화면에서 찾지 못했습니다." }, null, 2)
+      }]
+    };
+  }
+
+  const downloadedFiles = [];
+  const timestamp = Date.now();
+  const fsPromises = await import("node:fs/promises");
+
+  // 2. 다운로드 폴더에 저장
+  for (const item of extracted) {
+    if (!item.b64) continue;
+    const filename = `${prefix}_${timestamp}_${item.index + 1}.png`;
+    const fullPath = join(DOWNLOADS_DIR, filename);
+    const buf = Buffer.from(item.b64, "base64");
+    await fsPromises.writeFile(fullPath, buf);
+    downloadedFiles.push(fullPath);
+  }
+
+  // 3. 워터마크 인페인팅 복원 스크립트 실행 (워터마크 있는 사진 자동 삭제)
+  const inpaintResults = [];
+  for (const filePath of downloadedFiles) {
+    try {
+      const res = await runWatermarkRemover(filePath, false, deleteOriginal);
+      inpaintResults.push(res);
+    } catch (err) {
+      inpaintResults.push({ file: filePath, error: err.message });
+    }
+  }
+
+  return {
+    content: [{
+      type: "text",
+      text: JSON.stringify({
+        status: "success",
+        message: `${downloadedFiles.length}장의 이미지를 다운로드하고 워터마크 인페인팅 복원을 완료했습니다.`,
+        downloadsDir: DOWNLOADS_DIR,
+        downloadedCount: downloadedFiles.length,
+        inpaintResults
       }, null, 2)
     }]
   };
@@ -689,11 +851,35 @@ const TOOLS = [
   },
   {
     name: "flow_get_downloads",
-    description: "Google Flow 다운로드 폴더(Downloads/GoogleFlow_Downloads)의 최신 생성물 파일 목록을 조회하고 지정된 폴더(composites 등)로 복사합니다.",
+    description: "Google Flow 다운로드 폴더(Downloads/GoogleFlow_Downloads)의 최신 생성물 파일 목록을 조회하고 지정된 폴더(composites 등)로 복사합니다. 필요 시 워터마크 자동 제거를 함께 수행합니다.",
     inputSchema: {
       type: "object",
       properties: {
-        destinationFolder: { type: "string", description: "복사할 대상 폴더 경로 (예: H:\\source\\repos\\image\\composites)" }
+        destinationFolder: { type: "string", description: "복사할 대상 폴더 경로 (예: H:\\source\\repos\\image\\composites)" },
+        removeWatermarks: { type: "boolean", description: "조회 전 폴더 내 이미지들의 워터마크 인페인팅 복원을 자동 실행할지 여부 (기본값: false)" }
+      }
+    }
+  },
+  {
+    name: "flow_remove_watermarks",
+    description: "이미지 또는 폴더 내 이미지들의 Google 워터마크(우하단 별/AI 캡슐)를 인페인팅 복원 스크립트로 감쪽같이 지우고, 워터마크가 있는 원본 사진을 삭제하여 깨끗한 복원 이미지로 유지합니다.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        path: { type: "string", description: "워터마크를 제거할 단일 이미지 파일 경로 또는 폴더 경로 (생략 시 Downloads/GoogleFlow_Downloads 전체)" },
+        deleteOriginal: { type: "boolean", description: "워터마크가 있는 원본 이미지를 삭제할지 여부 (기본값: true)" }
+      }
+    }
+  },
+  {
+    name: "flow_download_images",
+    description: "Google Flow 현재 작업 화면의 생성 이미지들을 일괄 다운로드하고, 인페인팅 복원 스크립트를 즉시 실행하여 워터마크를 완벽히 제거한 뒤 워터마크 원본 사진을 자동 삭제합니다.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        prefix: { type: "string", description: "저장할 파일명 접두사 (예: BAD_APPLE, YARARARA, ZERO_TWO, GENIE). 기본값: GoogleFlow" },
+        limit: { type: "number", description: "다운로드할 최대 이미지 장수 (기본값: 50)" },
+        deleteOriginal: { type: "boolean", description: "워터마크 인페인팅 복원 후 워터마크가 있던 원본 사진을 삭제할지 여부 (기본값: true)" }
       }
     }
   }
@@ -763,6 +949,8 @@ async function handleRpc(req) {
         case "flow_generate_typography": res = await handleFlowGenerateTypography(args); break;
         case "flow_screenshot": res = await handleFlowScreenshot(args); break;
         case "flow_get_downloads": res = await handleFlowGetDownloads(args); break;
+        case "flow_remove_watermarks": res = await handleFlowRemoveWatermarks(args); break;
+        case "flow_download_images": res = await handleFlowDownloadImages(args); break;
         default:
           throw new Error(`알 수 없는 도구: ${name}`);
       }

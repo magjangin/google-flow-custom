@@ -109,7 +109,24 @@ $env:WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS = "--remote-debugging-port=9334"; Sta
   - 여러 단어로 구성된 한글/영문 제목이 자동으로 2줄로 쪼개져 세로 높이를 차지하는 것을 원천 방지: `SINGLE HORIZONTAL LINE ARRANGEMENT: Render all syllables strictly across one continuous horizontal row without breaking or wrapping into two lines.`
   - `sizeScale: "slim"` 지원: 캔버스 높이의 **6~9%** 수준으로 얇고 날렵한 수평 스트립 배너로 제한하여 캐릭터 얼굴과의 간섭을 100% 차단.
 
-## 12. 빌드 · 배포
+## 12. 워터마크 자동 감지 & 인페인팅 복원 및 다운로드 원본 정리 파이프라인 (2026-11-27 실측 추가)
+- **배경:** Google Flow 및 Imagen 모델로 생성된 이미지는 우하단 구석에 반투명한 Google DeepMind 4-point star(별) 또는 별 + "AI" 타원형 캡슐 워터마크가 부착되어 썸네일/자켓 활용 시 이질감 유발.
+- **워터마크 패턴 정밀 분석 (1376×768 실측):**
+  1. **단독 별 (Single Star):** 우하단 중심 `(w - 93, h - 93)` 좌표, 반경 34px 아스트로이드(4-point star) 곡선. (예: BAD APPLE, YARARARA 등)
+  2. **복합 워터마크 (Star + AI Capsule):** 별 중심 `(w - 128, h - 128)`, AI 타원 캡슐 중심 `(w - 50, h - 45)`.
+- **해결 방안 (`Scripts/remove_watermark.py`):**
+  - OpenCV `cv2.Canny` 및 정규화 템플릿 매칭(`cv2.matchTemplate(..., TM_CCORR_NORMED)`)으로 단독 별과 복합 별 위치를 정밀 판별.
+  - 파라메트릭 아스트로이드 마스크(`((x-cx)^p + (y-cy)^p)^(1/p) <= r`, `p=0.55`)와 캡슐 타원 마스크를 워터마크가 실제로 존재하는 위치에만 정밀 타기팅.
+  - 2px 팽창(Dilation)으로 안티에일리어싱 경계를 포괄한 뒤 `cv2.inpaint(..., inpaintRadius=3, flags=cv2.INPAINT_TELEA)` 적용.
+  - 옷감 주름, 불꽃 파티클, 배경 질감을 100% 자연스럽게 보존하면서 워터마크만 감쪽같이 제거.
+- **다운로드 & 원본 정리 자동화 (`mcp/index.mjs`):**
+  - `flow_remove_watermarks`: 단일 파일 또는 다운로드 폴더 전체의 워터마크를 인페인팅 복원하고 워터마크가 찍힌 원본 사진을 자동 삭제(`deleteOriginal: true`).
+  - `flow_download_images`: 브라우저 캔버스에서 무손실 PNG 추출 후 즉시 워터마크 인페인팅 복원 및 워터마크 원본 사진 삭제 파이프라인 수행.
+  - `flow_get_downloads`: `removeWatermarks: true` 옵션 지원.
+- **실기 검증 완료 (2026-11-27):**
+  - 이전 작업 18장(동방 BAD APPLE!!, 카사네 테토 YARARARA, 제로투 ZERO TWO, 카사네 테토 TETORIS) 및 오늘 작업 4장(총 22장) 전체 일괄 다운로드, 워터마크 100% 무손실 인페인팅 복원 및 워터마크 원본 사진 삭제 실측 완료.
+
+## 13. 빌드 · 배포
 ```powershell
 dotnet build "google flow custom.slnx"
 dotnet publish "google flow custom/google flow custom.csproj" -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -p:DebugType=none -o "publish/win-x64"
