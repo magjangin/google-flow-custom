@@ -426,15 +426,15 @@ async function handleFlowGenerateTypography(args) {
       `- ZERO TOLERANCE FOR SPELLING ERRORS: Absolutely DO NOT misspell, alter, add, or drop any Korean syllable blocks (음절), consonants (자음), or vowels (모음).`,
       `- NO WRONG CHARACTERS OR PSEUDO-GLYPHS: Absolutely DO NOT substitute with different Korean letters, do NOT use Chinese hanzi or Japanese kanji/kana, and do NOT generate gibberish or distorted alien Korean glyphs. Every Korean letter must be 100% genuine, grammatically correct, and structurally intact.`,
       `- KOREAN DISPLAY TYPEFACE DESIGN: Render the Korean title "${title}" in a premium, ultra-bold modern Korean rhythm game / K-pop graphic display logo typeface (현대적인 볼드 헤드라인/로고 서체) designed in ${stylePrompt}. Features sharp vector-grade contours, heavy solid weight, intense ${themeColor} neon outer glow, dark bevel finish, bold dual outline borders, and subtle thematic texture.`,
-      `- NEGATIVE SPACE DETAIL: Seamlessly carve ${symbolIdea} as crisp negative space silhouettes inside the closed counter loops/holes of the glyphs (${targetLetters}) while strictly preserving the legibility and recognizability of the Korean syllables.`,
+      `- PURE & UNCLUTTERED HANGUL COUNTERS: Absolutely DO NOT embed, carve, or place any symbols, flowers, stars, icons, or negative-space decorations inside the inner loops or counter holes of the Korean Hangul letters (strictly avoid decorating inside ㅇ, ㅁ, ㅂ, ㅍ, ㅎ). All inner letter spaces must be kept completely clean, sharp, solid, and hollow to ensure pristine typographic legibility and uncompromised Korean character recognition.`,
       `- SUBTITLE: "${subtitle}" placed directly underneath in matching compact bold font with themed neon rim glow and dark fill.`
     );
   } else {
-    // 기본 영문 최적화 규칙
+    // 기본 영문 최적화 규칙 (영문은 카운터 루프 네거티브 스페이스 적극 활용)
     promptParts.push(
       `Typography text arrangement:`,
       `- Line 1 (Main Title): "${title.toUpperCase()}" designed in ${stylePrompt} with intense ${themeColor} neon outer glow, dark bevel finish, bold dual outline borders, and subtle thematic texture.`,
-      `- Negative space detail (Clever Counter Loop Art): Seamlessly carve ${symbolIdea} as crisp negative space silhouettes inside the closed counter loops/holes of the letters (${targetLetters}).`,
+      `- Negative space detail (Clever Counter Loop Art): Seamlessly carve ${symbolIdea} as crisp negative space silhouettes inside the closed counter loops/holes of the English letters (${targetLetters}).`,
       `- Line 2 (Subtitle): "${subtitle.toUpperCase()}" placed directly underneath in matching compact bold font with themed neon rim glow and dark fill.`
     );
   }

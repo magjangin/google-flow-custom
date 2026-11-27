@@ -59,20 +59,25 @@
   2. **오탈자 / 유사 글자 치환 / 외계어 원천 금지 (Zero Tolerance):**
      `CRITICAL HANGUL TEXT ACCURACY & TYPOGRAPHY INSTRUCTIONS: Absolutely DO NOT misspell, alter, add, or drop any Korean syllable blocks, consonants, or vowels. Absolutely DO NOT substitute with different Korean letters, do NOT use Chinese hanzi or Japanese kanji/kana, and do NOT produce pseudo-Hangul or distorted alien glyphs.`
   3. **서체 스타일 정의:** 현대적인 K-pop / 리듬게임 그래픽 로고 디스플레이 서체 스타일(`bold modern Korean rhythm game / K-pop graphic display logo typeface`)로 지정하여 가독성과 글자 구조 보존을 극대화.
-  4. **언어 자동 판별 및 파라미터(`language: "auto" | "ko" | "en"`):** 기본 영문 환경을 유지하되, 한글이 포함되거나 사용자가 한국어를 명시 요청할 경우 즉시 한글 강화 파이프라인이 자동 발동.
+  4. **한글 카운터 홀 음각(네거티브 스페이스) 배제 원칙 (실측 교훈):**
+     - Nano Banana에서 한글은 초성·중성·종성의 복합 결합 구조라 글자 구멍(카운터) 안에 꽃/별/아이콘을 넣으면 자음(`ㅇ`, `ㅁ`, `ㅂ` 등)의 획 형태가 뭉개지거나 다른 글자로 오인될 위험이 큼.
+     - 따라서 **한글 메인 타이틀에는 카운터 홀 음각 장식을 일절 배제(`PURE & UNCLUTTERED HANGUL COUNTERS: strictly avoid decorating inside ㅇ, ㅁ, ㅂ, ㅍ, ㅎ`)**하고 깨끗하고 굵은 솔리드 획 구조를 유지.
+     - 카운터 홀 네거티브 스페이스 심볼 음각은 단순 루프 구조인 **영문 알파벳(`A, P, B, O, R`)에 집중 적용**.
+  5. **언어 자동 판별 및 파라미터(`language: "auto" | "ko" | "en"`):** 기본 영문 환경을 유지하되, 한글이 포함되거나 사용자가 한국어를 명시 요청할 경우 즉시 한글 강화 파이프라인이 자동 발동.
 
 ## 7. 시도했다가 버린 것 / 주의 (Dead Ends)
 - **`labs.google/fx/tools/flow`:** 예전 Flow 주소. 지금은 `https://flow.google.com/`로 308 리다이렉트된다. 시작 URL은 새 주소를 직접 쓴다.
+- **한글 카운터 홀 속 심볼 음각:** Nano Banana에서 한글 자음(ㅇ, ㅁ, ㅂ) 안쪽에 꽃이나 별 등 네거티브 스페이스 장식을 넣으려 하면 글자 획이 뭉개지거나 글자 형태가 오염됨. 한글은 내부 공간을 깨끗하게 유지해야 선명도가 극대화됨.
 - **빌드 경고 MSB3277 (WindowsBase 4.0 vs 5.0):** `Microsoft.Web.WebView2` 패키지의 WPF 어셈블리 참조 때문. 동작에는 영향 없음.
 - **일반 button.click() 트리거 실패:** Angular Material Button 및 ProseMirror 상호작용 시 단순 `btn.click()`이 무시될 수 있음. CDP의 `Input.dispatchMouseEvent`로 바운딩 렉트 중심 좌표를 쏴야 안정적으로 동작함.
 
-## 6. 실제 DOM 확인 방법
+## 8. 실제 DOM 확인 방법
 ```powershell
 $env:WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS = "--remote-debugging-port=9334"; Start-Process "google flow custom\bin\Debug\net10.0\google flow custom.exe"
 ```
 `http://127.0.0.1:9334/json`에서 `webSocketDebuggerUrl`을 얻어 `Runtime.evaluate`로 조회. 앱 안에서 F12도 가능.
 
-## 7. 빌드 · 배포
+## 9. 빌드 · 배포
 ```powershell
 dotnet build "google flow custom.slnx"
 dotnet publish "google flow custom/google flow custom.csproj" -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -p:DebugType=none -o "publish/win-x64"
