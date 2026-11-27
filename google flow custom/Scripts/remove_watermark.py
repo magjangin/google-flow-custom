@@ -30,77 +30,76 @@ def create_capsule_mask_patch(patch_shape, cx, cy, rx=28, ry=18):
 
 def detect_and_create_watermark_mask(img):
     """
-    이미지 해상도에 맞춰 우하단 워터마크 영역을 분석하고 마스크를 생성합니다.
-    - 해상도 1376x768 또는 유사 와이드/정사각형 기준
-    - 패턴 1: 단독 별 중심 (w - 93, h - 93)
-    - 패턴 2: 별 (w - 128, h - 128) + AI 캡슐 (w - 50, h - 45)
+    이미지 해상도에 맞춰 우하단 워터마크 영역을 정밀 마스크합니다.
+    - 우하단 단독 별: 중심 (w - 93, h - 93), 반경 34px (4-point star astroid)
+    - 우하단 복합 별: 중심 (w - 128, h - 128), 반경 34px (4-point star astroid)
+    - 우하단 AI 캡슐: 중심 (w - 60, h - 60), rx=26, ry=15 (타원)
     """
     h, w = img.shape[:2]
     mask = np.zeros((h, w), dtype=np.uint8)
 
-    # 우하단 200x200 영역 추출
-    patch_size = 200
-    if h < patch_size or w < patch_size:
-        patch_size = min(h, w)
-    
-    x0 = w - patch_size
-    y0 = h - patch_size
-    patch = img[y0:h, x0:w]
-    patch_gray = cv2.cvtColor(patch, cv2.COLOR_BGR2GRAY)
+    # 1. 단독 별 마스크
+    star1 = np.zeros((h, w), dtype=np.uint8)
+    yy, xx = np.mgrid[max(0, h-200):h, max(0, w-200):w]
+    cx1, cy1 = w - 93, h - 93
+    p = 0.55
+    r = 34
+    dist1 = (np.abs(xx - cx1)**p + np.abs(yy - cy1)**p)**(1/p)
+    star1[max(0, h-200):h, max(0, w-200):w] = (dist1 <= r).astype(np.uint8) * 255
 
-    # 별 템플릿 (중심 35, 35, 크기 70x70)
+    # 2. 복합 별 마스크
+    star2 = np.zeros((h, w), dtype=np.uint8)
+    cx2, cy2 = w - 128, h - 128
+    dist2 = (np.abs(xx - cx2)**p + np.abs(yy - cy2)**p)**(1/p)
+    star2[max(0, h-200):h, max(0, w-200):w] = (dist2 <= r).astype(np.uint8) * 255
+
+    # 3. AI 캡슐 마스크 (중심 w-60, h-60)
+    ai_capsule = np.zeros((h, w), dtype=np.uint8)
+    cv2.ellipse(ai_capsule, (w - 60, h - 60), (26, 15), 0, 0, 360, 255, -1)
+
+    # 이미지 우하단 패치에서 어떤 별이 있는지 확인 (에지 매칭)
+    patch_size = 200
+    x0, y0 = w - patch_size, h - patch_size
+    patch_gray = cv2.cvtColor(img[y0:h, x0:w], cv2.COLOR_BGR2GRAY)
+    patch_edge = cv2.Canny(patch_gray, 50, 150)
+
     tpl_size = 70
     tpl_center = 35
     tpl = create_star_mask_patch((tpl_size, tpl_size), tpl_center, tpl_center, r=34, p=0.55)
     tpl_edge = cv2.Canny(tpl, 50, 150)
-
-    # 1. 단독 별 위치: 패치 기준 cx1 = patch_size - 93, cy1 = patch_size - 93
-    cx1 = patch_size - 93
-    cy1 = patch_size - 93
-    
-    # 2. 복합 워터마크 별 위치: 패치 기준 cx2 = patch_size - 128, cy2 = patch_size - 128
-    cx2 = patch_size - 128
-    cy2 = patch_size - 128
-
-    # 3. AI 캡슐 위치: 패치 기준 cx_ai = patch_size - 50, cy_ai = patch_size - 45
-    cx_ai = patch_size - 50
-    cy_ai = patch_size - 45
-
-    # 에지 템플릿 정규화 매칭
-    patch_edge = cv2.Canny(patch_gray, 50, 150)
     res = cv2.matchTemplate(patch_edge, tpl_edge, cv2.TM_CCORR_NORMED)
 
-    # 1. 단독 별 위치 (중심: patch_size - 93, patch_size - 93)
-    tl1_x = max(0, cx1 - tpl_center)
-    tl1_y = max(0, cy1 - tpl_center)
-    val1 = np.max(res[max(0, tl1_y - 10):min(res.shape[0], tl1_y + 10),
-                      max(0, tl1_x - 10):min(res.shape[1], tl1_x + 10)]) if res.size > 0 else 0
+    # 위치 1 (단독 별): (107, 107) -> tl = (72, 72)
+    val1 = np.max(res[62:82, 62:82]) if res.size > 0 else 0
+    # 위치 2 (복합 별): (72, 72) -> tl = (37, 37)
+    val2 = np.max(res[27:47, 27:47]) if res.size > 0 else 0
 
-    # 2. 복합 별 위치 (중심: patch_size - 128, patch_size - 128)
-    tl2_x = max(0, cx2 - tpl_center)
-    tl2_y = max(0, cy2 - tpl_center)
-    val2 = np.max(res[max(0, tl2_y - 10):min(res.shape[0], tl2_y + 10),
-                      max(0, tl2_x - 10):min(res.shape[1], tl2_x + 10)]) if res.size > 0 else 0
+    # AI 캡슐 영역 (중심 w-60, h-60 -> 패치 기준 140, 140) 밝기 검사
+    ai_crop = patch_gray[130:155, 120:160]
+    has_ai = False
+    if ai_crop.size > 0:
+        # 배경 평균보다 높은 밝기 영역이나 캡슐 형태 감지
+        if np.mean(ai_crop) > 120 or np.max(ai_crop) > 200:
+            has_ai = True
 
-    patch_mask = np.zeros((patch_size, patch_size), dtype=np.uint8)
-    detected_type = "none"
-
-    # 복합 워터마크 여부 판단: val2가 val1보다 유의미하게 크거나(예: val2 > 0.25 and val2 > val1 * 1.5)
+    # 최적의 마스크 조합
+    combined = np.zeros((h, w), dtype=np.uint8)
     if val2 > 0.25 and val2 > val1 * 1.5:
+        combined = cv2.bitwise_or(star2, ai_capsule)
         detected_type = "star_and_ai"
-        star_m = create_star_mask_patch((patch_size, patch_size), cx2, cy2, r=34, p=0.55)
-        ai_m = create_capsule_mask_patch((patch_size, patch_size), cx_ai, cy_ai, rx=28, ry=18)
-        patch_mask = cv2.bitwise_or(star_m, ai_m)
     else:
-        # 단독 별 워터마크 적용
-        detected_type = "single_star"
-        patch_mask = create_star_mask_patch((patch_size, patch_size), cx1, cy1, r=34, p=0.55)
+        # 단독 별이 기본, 하지만 AI 캡슐도 감지되면 함께 제거
+        if has_ai or val2 > 0.15:
+            combined = cv2.bitwise_or(star1, ai_capsule)
+            detected_type = "star_and_ai"
+        else:
+            combined = star1
+            detected_type = "single_star"
 
-    # 2px dilation으로 경계 안티에일리어싱 완벽 커버
+    # 2px 팽창으로 경계 안티에일리어싱 완전 포괄
     kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (5, 5))
-    patch_mask = cv2.dilate(patch_mask, kernel, iterations=1)
+    mask = cv2.dilate(combined, kernel, iterations=1)
 
-    mask[y0:h, x0:w] = patch_mask
     return mask, detected_type
 
 def remove_watermark_from_image(input_path, output_path=None, delete_original=False):
