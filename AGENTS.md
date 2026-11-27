@@ -92,7 +92,16 @@ $env:WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS = "--remote-debugging-port=9334"; Sta
 ```
 `http://127.0.0.1:9334/json`에서 `webSocketDebuggerUrl`을 얻어 `Runtime.evaluate`로 조회. 앱 안에서 F12도 가능.
 
-## 10. 빌드 · 배포
+## 10. 지니/판타지 테마 실측 및 사과 기본값 제거, 비비드 캔디 팝 & 요술 램프/골든 윙 스타일 정립 (2026-11-27 추가)
+- **사과 기본값 제거:** 초기 Bad Apple 모티브로 남아있던 `symbolIdea` 기본값(`apple silhouette`)으로 인해 지니/아라비안 테마 등 다른 곡에서도 사과가 음각되던 어색함 발견 → 곡 테마와 자연스럽게 어우러지는 범용 기본값(`sparkling starburst and diamond twinkle silhouettes`)으로 교체.
+- **카사네 테토 「승인해주세요 지니님 (APPROVE PLEASE, GENIE!)」 실측 교훈:**
+  - 사과 실루엣은 지니 곡의 캐릭터/설정과 무관하여 어색함.
+  - 글자 카운터(P, O, A) 속 음각은 반드시 곡의 시그니처 소품인 **요술 램프(Genie's Lamp)**와 **반짝이는 다이아몬드 별빛**으로 엄격 지정할 때 몰입감이 극대화됨.
+  - **비비드 캔디 팝 & 골든 윙 스타일의 압도적 선호:**
+    - 마젠타 핑크에서 카나리아 옐로우로 이어지는 3D 캔디 그라데이션 + 핫핑크 베벨 외곽선 + 황금빛 림라이트.
+    - 하단 `CUSTOM CHART`는 날개 달린 골든 윙 크레스트(중앙 자수정 보석 장식) 또는 딥 바이올렛 & 골드 스타 필(Pill) 배지로 구성할 때 아케이드 리듬게임 자켓 완성도가 최상에 도달함.
+
+## 11. 빌드 · 배포
 ```powershell
 dotnet build "google flow custom.slnx"
 dotnet publish "google flow custom/google flow custom.csproj" -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -p:DebugType=none -o "publish/win-x64"

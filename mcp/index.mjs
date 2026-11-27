@@ -390,7 +390,7 @@ async function handleFlowGenerateTypography(args) {
     title,
     subtitle = "CUSTOM CHART",
     themeColor = "Crimson Red / Blood Red (#ff2244)",
-    symbolIdea = "apple silhouette with stem and leaf in counter holes of letters A and P",
+    symbolIdea = "sparkling starburst and diamond twinkle silhouettes",
     stylePrompt = "heavy bold textured lettering with intense neon outer glow, dark embossed bevel and double borders",
     placement = "lower wide center foreground across the bottom",
     negativeSpaceTarget,
