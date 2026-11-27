@@ -11,13 +11,16 @@ const DEFAULT_EXE_PATHS = [
 const DOWNLOADS_DIR = join(homedir(), "Downloads", "GoogleFlow_Downloads");
 const WATERMARK_SCRIPT_PATH = "H:\\source\\repos\\google flow custom\\google flow custom\\Scripts\\remove_watermark.py";
 
-function runWatermarkRemover(targetPath, isDir = false, deleteOriginal = true) {
+function runWatermarkRemover(targetPath, isDir = false, deleteOriginal = true, outputPath = null) {
   return new Promise((resolve, reject) => {
     const pyArgs = [WATERMARK_SCRIPT_PATH];
     if (isDir) {
       pyArgs.push("--dir", targetPath);
     } else {
       pyArgs.push("--file", targetPath);
+      if (outputPath) {
+        pyArgs.push("--out", outputPath);
+      }
     }
     if (deleteOriginal) {
       pyArgs.push("--delete-original");
@@ -619,10 +622,13 @@ async function handleFlowGetDownloads(args) {
 
 /**
  * 이미지 워터마크 인페인팅 복원 및 워터마크 원본 사진 삭제 도구
+ * 에이전트가 복원 후 저장할 파일명(outputFilename / outputPath)을 직접 설정 가능
  */
 async function handleFlowRemoveWatermarks(args) {
   const targetPath = args?.path || DOWNLOADS_DIR;
   const deleteOriginal = args?.deleteOriginal !== false; // 기본값: true (워터마크 원본 삭제)
+  const outputFilename = args?.outputFilename || args?.outputName || args?.filename;
+  const outputPath = args?.outputPath || (outputFilename ? join(DOWNLOADS_DIR, outputFilename.endsWith(".png") ? outputFilename : outputFilename + ".png") : null);
 
   if (!existsSync(targetPath)) {
     throw new Error(`대상을 찾을 수 없습니다: ${targetPath}`);
@@ -630,15 +636,16 @@ async function handleFlowRemoveWatermarks(args) {
 
   const stat = statSync(targetPath);
   const isDir = stat.isDirectory();
-  const res = await runWatermarkRemover(targetPath, isDir, deleteOriginal);
+  const res = await runWatermarkRemover(targetPath, isDir, deleteOriginal, outputPath);
 
   return {
     content: [{
       type: "text",
       text: JSON.stringify({
         status: "success",
-        message: "워터마크 인페인팅 복원이 완료되었으며 워터마크 원본 사진이 정리되었습니다.",
+        message: "워터마크 인페인팅 복원이 완료되었으며 지정된 파일명으로 저장되었습니다.",
         targetPath,
+        savedPath: outputPath || targetPath,
         isDir,
         result: res
       }, null, 2)
@@ -649,12 +656,16 @@ async function handleFlowRemoveWatermarks(args) {
 /**
  * Google Flow 현재 작업 화면의 생성 이미지들을 일괄 다운로드하고
  * 인페인팅 복원 스크립트를 즉시 실행하여 워터마크를 제거한 뒤 원본 사진을 삭제하는 도구
+ * 에이전트가 파일명(filename / filenames / prefix)을 자유롭게 직접 지정 가능
  */
 async function handleFlowDownloadImages(args) {
   const ws = await getActiveWs();
-  const prefix = args?.prefix || "GoogleFlow";
+  const filenames = args?.filenames || []; // 에이전트가 직접 지정하는 파일명 배열
+  const filename = args?.filename || args?.outputName; // 단일 이미지 파일명 지정 시
+  const prefix = args?.prefix || "Flow_Image";
   const limit = args?.limit || 50;
-  const deleteOriginal = args?.deleteOriginal !== false; // 기본값 true
+  const deleteOriginal = args?.deleteOriginal !== false; // 기본값 true (워터마크 원본 삭제)
+  const useTimestamp = args?.useTimestamp === true; // 타임스탬프 난수는 명시 요청 시에만
 
   if (!existsSync(DOWNLOADS_DIR)) {
     mkdirSync(DOWNLOADS_DIR, { recursive: true });
@@ -700,27 +711,40 @@ async function handleFlowDownloadImages(args) {
   }
 
   const downloadedFiles = [];
-  const timestamp = Date.now();
   const fsPromises = await import("node:fs/promises");
 
-  // 2. 다운로드 폴더에 저장
+  // 2. 에이전트가 설정한 파일명으로 다운로드 폴더에 저장
   for (const item of extracted) {
     if (!item.b64) continue;
-    const filename = `${prefix}_${timestamp}_${item.index + 1}.png`;
-    const fullPath = join(DOWNLOADS_DIR, filename);
+    
+    let fname = "";
+    if (extracted.length === 1 && filename) {
+      fname = filename;
+    } else if (filenames && filenames[item.index]) {
+      fname = filenames[item.index];
+    } else if (useTimestamp) {
+      fname = `${prefix}_${Date.now()}_${item.index + 1}.png`;
+    } else {
+      // 난수 없이 직관적인 연번 파일명 (예: BAD_APPLE_01.png)
+      fname = `${prefix}_${String(item.index + 1).padStart(2, '0')}.png`;
+    }
+
+    if (!fname.toLowerCase().endsWith(".png")) fname += ".png";
+
+    const fullPath = join(DOWNLOADS_DIR, fname);
     const buf = Buffer.from(item.b64, "base64");
     await fsPromises.writeFile(fullPath, buf);
-    downloadedFiles.push(fullPath);
+    downloadedFiles.push({ path: fullPath, name: fname });
   }
 
-  // 3. 워터마크 인페인팅 복원 스크립트 실행 (워터마크 있는 사진 자동 삭제)
+  // 3. 워터마크 인페인팅 복원 스크립트 실행 (워터마크 원본 사진 자동 삭제)
   const inpaintResults = [];
-  for (const filePath of downloadedFiles) {
+  for (const fObj of downloadedFiles) {
     try {
-      const res = await runWatermarkRemover(filePath, false, deleteOriginal);
-      inpaintResults.push(res);
+      const res = await runWatermarkRemover(fObj.path, false, deleteOriginal);
+      inpaintResults.push({ name: fObj.name, path: fObj.path, result: res });
     } catch (err) {
-      inpaintResults.push({ file: filePath, error: err.message });
+      inpaintResults.push({ name: fObj.name, path: fObj.path, error: err.message });
     }
   }
 
@@ -729,9 +753,10 @@ async function handleFlowDownloadImages(args) {
       type: "text",
       text: JSON.stringify({
         status: "success",
-        message: `${downloadedFiles.length}장의 이미지를 다운로드하고 워터마크 인페인팅 복원을 완료했습니다.`,
+        message: `${downloadedFiles.length}장의 이미지를 에이전트가 지정한 파일명으로 다운로드하고 워터마크 인페인팅 복원을 완료했습니다.`,
         downloadsDir: DOWNLOADS_DIR,
         downloadedCount: downloadedFiles.length,
+        savedFiles: downloadedFiles.map(d => d.name),
         inpaintResults
       }, null, 2)
     }]
@@ -862,24 +887,33 @@ const TOOLS = [
   },
   {
     name: "flow_remove_watermarks",
-    description: "이미지 또는 폴더 내 이미지들의 Google 워터마크(우하단 별/AI 캡슐)를 인페인팅 복원 스크립트로 감쪽같이 지우고, 워터마크가 있는 원본 사진을 삭제하여 깨끗한 복원 이미지로 유지합니다.",
+    description: "이미지 또는 폴더 내 이미지들의 Google 워터마크(우하단 별/AI 캡슐)를 인페인팅 복원 스크립트로 감쪽같이 지우고, 워터마크가 있는 원본 사진을 삭제하여 깨끗한 복원 이미지로 유지합니다. 에이전트가 복원 후 저장할 파일명을 직접 지정할 수 있습니다.",
     inputSchema: {
       type: "object",
       properties: {
         path: { type: "string", description: "워터마크를 제거할 단일 이미지 파일 경로 또는 폴더 경로 (생략 시 Downloads/GoogleFlow_Downloads 전체)" },
+        outputFilename: { type: "string", description: "에이전트가 직접 지정할 복원 저장 파일명 (예: 원신_La_Vaguelette.png). 단일 파일 복원 시 사용." },
+        outputPath: { type: "string", description: "에이전트가 직접 지정할 복원 저장 전체 경로" },
         deleteOriginal: { type: "boolean", description: "워터마크가 있는 원본 이미지를 삭제할지 여부 (기본값: true)" }
       }
     }
   },
   {
     name: "flow_download_images",
-    description: "Google Flow 현재 작업 화면의 생성 이미지들을 일괄 다운로드하고, 인페인팅 복원 스크립트를 즉시 실행하여 워터마크를 완벽히 제거한 뒤 워터마크 원본 사진을 자동 삭제합니다.",
+    description: "Google Flow 현재 작업 화면의 생성 이미지들을 일괄 다운로드하고, 인페인팅 복원 스크립트를 즉시 실행하여 워터마크를 완벽히 제거한 뒤 워터마크 원본 사진을 자동 삭제합니다. 에이전트가 파일명이나 파일명 목록을 원하는 대로 직접 지정할 수 있습니다.",
     inputSchema: {
       type: "object",
       properties: {
-        prefix: { type: "string", description: "저장할 파일명 접두사 (예: BAD_APPLE, YARARARA, ZERO_TWO, GENIE). 기본값: GoogleFlow" },
+        filename: { type: "string", description: "단일 이미지 다운로드 시 에이전트가 직접 지정할 파일명 (예: 원신_La_Vaguelette.png)" },
+        filenames: {
+          type: "array",
+          items: { type: "string" },
+          description: "복수 이미지 다운로드 시 각 순서에 맞게 에이전트가 직접 지정할 파일명 목록 (예: ['드림모드_01.png', '드림모드_02.png'])"
+        },
+        prefix: { type: "string", description: "파일명 목록 미지정 시 사용할 파일명 접두사 (예: BAD_APPLE, YARARARA, ZERO_TWO, 드림모드). 기본값: Flow_Image" },
         limit: { type: "number", description: "다운로드할 최대 이미지 장수 (기본값: 50)" },
-        deleteOriginal: { type: "boolean", description: "워터마크 인페인팅 복원 후 워터마크가 있던 원본 사진을 삭제할지 여부 (기본값: true)" }
+        deleteOriginal: { type: "boolean", description: "워터마크 인페인팅 복원 후 워터마크가 있던 원본 사진을 삭제할지 여부 (기본값: true)" },
+        useTimestamp: { type: "boolean", description: "타임스탬프 난수를 파일명에 붙일지 여부 (기본값: false, 기본은 깔끔한 연번)" }
       }
     }
   }
