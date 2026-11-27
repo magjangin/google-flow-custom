@@ -65,19 +65,29 @@
      - 카운터 홀 네거티브 스페이스 심볼 음각은 단순 루프 구조인 **영문 알파벳(`A, P, B, O, R`)에 집중 적용**.
   5. **언어 자동 판별 및 파라미터(`language: "auto" | "ko" | "en"`):** 기본 영문 환경을 유지하되, 한글이 포함되거나 사용자가 한국어를 명시 요청할 경우 즉시 한글 강화 파이프라인이 자동 발동.
 
-## 7. 시도했다가 버린 것 / 주의 (Dead Ends)
+## 7. 타이포그래피 과대화 방지 및 적절한 크기(Scale) 자동 판단 파이프라인 (2026-11-27 추가)
+- **문제 진단:** 2~4글자 정도의 짧은 타이틀(예: `명일방주`, `TETORIS`)의 경우, 이미지 생성 모델이 화면 공간을 채우기 위해 타이포그래피를 과도하게 거대하게(화면의 40~50% 이상) 키워 캐릭터나 배경 일러스트를 가리는 문제 발생.
+- **해결 방안 (`sizeScale` 파라미터 및 자동 스케일링 지침):**
+  - **`auto` (기본값):** 글자 수와 레이아웃에 맞춰 세로 비율을 스마트 제어.
+    - 4글자 이하: 화면 높이의 약 20~25%로 엄격하게 절제하여 주변 여백(Breathing room)을 확보하고 캐릭터/배경 아트를 절대 가리지 않음.
+    - 5~8글자: 세로 20% 내외로 자연스러운 가로 확장.
+    - 9글자 이상: 세로 15~20%로 세련된 슬림 디스플레이 로고 스케일링.
+  - **명시적 옵션:** `compact` (15~20% 절제 크기), `balanced` (20~25% 표준 균형 크기), `large` (30~35% 대형 강조).
+  - **프롬프트 제약:** `PROPORTION & SIZE SCALE CONTROL: strictly never oversized, never dominating the entire frame, and leaving clean visual breathing room for the characters and background.`
+
+## 8. 시도했다가 버린 것 / 주의 (Dead Ends)
 - **`labs.google/fx/tools/flow`:** 예전 Flow 주소. 지금은 `https://flow.google.com/`로 308 리다이렉트된다. 시작 URL은 새 주소를 직접 쓴다.
 - **한글 카운터 홀 속 심볼 음각:** Nano Banana에서 한글 자음(ㅇ, ㅁ, ㅂ) 안쪽에 꽃이나 별 등 네거티브 스페이스 장식을 넣으려 하면 글자 획이 뭉개지거나 글자 형태가 오염됨. 한글은 내부 공간을 깨끗하게 유지해야 선명도가 극대화됨.
 - **빌드 경고 MSB3277 (WindowsBase 4.0 vs 5.0):** `Microsoft.Web.WebView2` 패키지의 WPF 어셈블리 참조 때문. 동작에는 영향 없음.
 - **일반 button.click() 트리거 실패:** Angular Material Button 및 ProseMirror 상호작용 시 단순 `btn.click()`이 무시될 수 있음. CDP의 `Input.dispatchMouseEvent`로 바운딩 렉트 중심 좌표를 쏴야 안정적으로 동작함.
 
-## 8. 실제 DOM 확인 방법
+## 9. 실제 DOM 확인 방법
 ```powershell
 $env:WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS = "--remote-debugging-port=9334"; Start-Process "google flow custom\bin\Debug\net10.0\google flow custom.exe"
 ```
 `http://127.0.0.1:9334/json`에서 `webSocketDebuggerUrl`을 얻어 `Runtime.evaluate`로 조회. 앱 안에서 F12도 가능.
 
-## 9. 빌드 · 배포
+## 10. 빌드 · 배포
 ```powershell
 dotnet build "google flow custom.slnx"
 dotnet publish "google flow custom/google flow custom.csproj" -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -p:DebugType=none -o "publish/win-x64"

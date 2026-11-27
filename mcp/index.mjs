@@ -382,7 +382,8 @@ async function handleFlowUploadMedia(args) {
 /**
  * 유튜브 썸네일 & 리듬게임 커스텀 차트용 알잘딱 타이포그래피 생성 도구
  * (하단 와이드 2단 배치, 네온 아우터 글로우, 이중 외곽선, 네거티브 스페이스 심볼 음각 및 장르/곡 테마 연출)
- * 한국어 요청 시 한글 철자 왜곡/외계어/오탈자/한자 치환을 원천 차단하는 빡빡한 한글 프롬프트 엔지니어링 적용
+ * 한국어 요청 시 한글 철자 왜곡/외계어/오탈자/한자 치환 원천 차단 및 카운터 홀 장식 배제로 순수 획 보존
+ * 글자 수 및 구도에 따른 과대화 방지 적절 크기(Scale) 자동 판단 로직 내장
  */
 async function handleFlowGenerateTypography(args) {
   const {
@@ -395,6 +396,7 @@ async function handleFlowGenerateTypography(args) {
     negativeSpaceTarget,
     inferenceReasoning = "",
     language = "auto",
+    sizeScale = "auto",
     submit = true
   } = args;
 
@@ -404,7 +406,28 @@ async function handleFlowGenerateTypography(args) {
   const hasKorean = /[ㄱ-ㅎ|ㅏ-ㅣ|가-힣]/.test(title + (subtitle || ""));
   const isKoreanMode = language === "ko" || (language === "auto" && hasKorean);
 
-  // 네거티브 스페이스 기본 타깃 글자
+  // 적절한 크기(scale/proportion) 자동 판단 로직
+  let scaleInstruction = "";
+  const titleLength = title.trim().length;
+
+  if (sizeScale === "compact") {
+    scaleInstruction = "tasteful compact scale occupying approximately 15-20% of the canvas height, leaving wide breathing room around the art";
+  } else if (sizeScale === "large") {
+    scaleInstruction = "prominent large scale occupying approximately 30-35% of the canvas height";
+  } else if (sizeScale === "balanced") {
+    scaleInstruction = "refined balanced medium scale occupying approximately 20-25% of the canvas height, never oversized or ballooning";
+  } else {
+    // auto 모드: 짧은 단어일수록 모델이 화면을 꽉 채우려 거대화하므로 스마트 절제
+    if (titleLength <= 4) {
+      scaleInstruction = "refined, well-proportioned medium-compact scale occupying strictly around 20-25% of the canvas height, maintaining ample negative margins so it never balloons into an oversized giant logo";
+    } else if (titleLength <= 8) {
+      scaleInstruction = "balanced medium scale occupying approximately 20% of the canvas height, elegantly proportioned across the frame";
+    } else {
+      scaleInstruction = "sleek horizontal display scale occupying approximately 15-20% of the canvas height, carefully scaled without crowding screen edges";
+    }
+  }
+
+  // 네거티브 스페이스 기본 타깃 글자 (영문에만 적용)
   let targetLetters = negativeSpaceTarget;
   if (!targetLetters) {
     targetLetters = isKoreanMode ? "ㅇ, ㅁ, ㅂ, ㅍ, ㅎ, 0, 2, 8, B, P, R, D" : "A, P, B, O, R";
@@ -413,7 +436,8 @@ async function handleFlowGenerateTypography(args) {
   const promptParts = [
     `Keep this exact image, character face, pose, outfit, and background composition completely 100% intact and unchanged.`,
     `Do not alter or redraw the girl/character or the background scene.`,
-    `Overlay an ultra high-quality, professional rhythm game / YouTube thumbnail typography title at the ${placement}.`
+    `Overlay an ultra high-quality, professional rhythm game / YouTube thumbnail typography title at the ${placement}.`,
+    `PROPORTION & SIZE SCALE CONTROL: Render the typography title at a ${scaleInstruction}. It must feel like an intentional, premium official rhythm game title logo—strictly never oversized, never dominating the entire frame, and leaving clean visual breathing room for the characters and background.`
   ];
 
   if (isKoreanMode) {
@@ -458,6 +482,8 @@ async function handleFlowGenerateTypography(args) {
         subtitle,
         themeColor,
         symbolIdea,
+        sizeScale,
+        scaleInstruction,
         negativeSpaceTarget: targetLetters,
         inferenceReasoning,
         generatedPrompt: prompt,
@@ -601,7 +627,7 @@ const TOOLS = [
   },
   {
     name: "flow_generate_typography",
-    description: "유튜브 썸네일 및 리듬게임 커스텀 차트용 멀티모달 테마 추론 기반 알잘딱 타이포그래피(2단 와이드 하단 배치, 테마 질감/글로우, 네거티브 스페이스 심볼 음각, 한국어 글자 왜곡 방지 강화)를 주입하여 생성합니다.",
+    description: "유튜브 썸네일 및 리듬게임 커스텀 차트용 멀티모달 테마 추론 기반 알잘딱 타이포그래피(2단 와이드 하단/상단 배치, 테마 질감/글로우, 네거티브 스페이스 심볼 음각, 한국어 글자 왜곡 방지 및 과대화 방지 적절 크기 제어)를 주입하여 생성합니다.",
     inputSchema: {
       type: "object",
       properties: {
@@ -611,9 +637,10 @@ const TOOLS = [
         symbolIdea: { type: "string", description: "글자 카운터(구멍) 안에 들어갈 테마 네거티브 스페이스 심볼 (예: apple silhouette with stem, falling tetramino tetromino block, bunny head silhouette)" },
         stylePrompt: { type: "string", description: "폰트 장르/질감 프롬프트 (예: retro 8-bit arcade brick grid tetromino style, sharp graffiti lettering, glossy holographic cyber pop)" },
         negativeSpaceTarget: { type: "string", description: "심볼이 음각될 대상 글자 (영문 기본값: A, P, B, O, R / 한글 기본값: ㅇ, ㅁ, ㅂ, ㅍ, ㅎ, 0, 2, 8, B, P, R, D)" },
-        placement: { type: "string", description: "배치 위치 (기본값: lower wide center foreground across the bottom)" },
+        placement: { type: "string", description: "배치 위치 (기본값: lower wide center foreground across the bottom / 상단: upper wide center foreground across the top)" },
         inferenceReasoning: { type: "string", description: "시각 분석 및 웹 검색을 통해 도출한 테마/심볼 선정 추론 이유" },
         language: { type: "string", description: "타이포그래피 언어 모드 ('auto': 자동 감지, 'ko': 한국어 한글 철자 왜곡 방지 및 자모음 100% 일치 강화 모드, 'en': 기본 영문 대문자 모드). 기본값: 'auto'" },
+        sizeScale: { type: "string", description: "타이포그래피 크기 비율 제어 ('auto': 글자 수 기반 과대화 방지 자동 판단, 'compact': 15-20% 아담한 절제 크기, 'balanced': 20-25% 표준 크기, 'large': 30-35% 강조 대형 크기). 기본값: 'auto'" },
         submit: { type: "boolean", description: "입력 후 생성 시작 버튼을 자동 클릭할지 여부 (기본값: true)" }
       },
       required: ["title"]
