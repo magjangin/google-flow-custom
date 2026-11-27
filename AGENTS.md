@@ -101,7 +101,15 @@ $env:WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS = "--remote-debugging-port=9334"; Sta
     - 마젠타 핑크에서 카나리아 옐로우로 이어지는 3D 캔디 그라데이션 + 핫핑크 베벨 외곽선 + 황금빛 림라이트.
     - 하단 `CUSTOM CHART`는 날개 달린 골든 윙 크레스트(중앙 자수정 보석 장식) 또는 딥 바이올렛 & 골드 스타 필(Pill) 배지로 구성할 때 아케이드 리듬게임 자켓 완성도가 최상에 도달함.
 
-## 11. 빌드 · 배포
+## 11. 상단 최상단(High-Top) 헤드룸 밀어올림 및 단일 행(1줄) 슬림 가로 배치 파이프라인 (2026-11-27 추가)
+- **배경:** 모델에게 단순 `top`을 지시하면 캔버스 중앙부(Center)나 캐릭터 머리 바로 위까지 내려앉아 캐릭터 얼굴이나 머리를 압박하는 문제 발생.
+- **상단 배치 물리적 좌표 지침 정밀화:**
+  - 상단(`top`, `upper`, `high`) 지정 시 `very high upper top headroom strictly near the top ceiling border of the frame, well elevated high above any character heads, hair, ears, shoulders, or hats, keeping a generous empty vertical gap of at least 15-20% frame height above the characters`로 강제.
+- **단일 행(1줄) 가로 배치 (`singleLine: true`):**
+  - 여러 단어로 구성된 한글/영문 제목이 자동으로 2줄로 쪼개져 세로 높이를 차지하는 것을 원천 방지: `SINGLE HORIZONTAL LINE ARRANGEMENT: Render all syllables strictly across one continuous horizontal row without breaking or wrapping into two lines.`
+  - `sizeScale: "slim"` 지원: 캔버스 높이의 **6~9%** 수준으로 얇고 날렵한 수평 스트립 배너로 제한하여 캐릭터 얼굴과의 간섭을 100% 차단.
+
+## 12. 빌드 · 배포
 ```powershell
 dotnet build "google flow custom.slnx"
 dotnet publish "google flow custom/google flow custom.csproj" -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -p:DebugType=none -o "publish/win-x64"

@@ -398,6 +398,7 @@ async function handleFlowGenerateTypography(args) {
     language = "auto",
     sizeScale = "auto",
     subtitleStyle = "auto",
+    singleLine = false,
     submit = true
   } = args;
 
@@ -407,11 +408,22 @@ async function handleFlowGenerateTypography(args) {
   const hasKorean = /[ㄱ-ㅎ|ㅏ-ㅣ|가-힣]/.test(title + (subtitle || ""));
   const isKoreanMode = language === "ko" || (language === "auto" && hasKorean);
 
+  // 배치 위치(placement) 지침 정밀화: 상단 요청 시 캐릭터 머리 위 최상단 하늘 영역으로 명확히 밀어올림
+  let placementInstruction = placement;
+  const isTopPlacement = /top|upper|high/i.test(placement);
+  if (isTopPlacement) {
+    placementInstruction = "very high upper top headroom strictly near the top ceiling border of the frame, well elevated high above any character heads, hair, ears, shoulders, or hats, keeping a generous empty vertical gap of at least 15-20% frame height above the characters";
+  } else if (/bottom|lower/i.test(placement)) {
+    placementInstruction = "lower wide foreground across the bottom edge of the frame, well below any central action";
+  }
+
   // 적절한 크기(scale/proportion) 자동 판단 로직
   let scaleInstruction = "";
   const titleLength = title.trim().length;
 
-  if (sizeScale === "compact") {
+  if (sizeScale === "slim" || singleLine) {
+    scaleInstruction = "ultra-slim and sleek horizontal strip proportion occupying strictly around 6-9% of the canvas height and at most 32-35% canvas width, sitting very thin and flat near the top border";
+  } else if (sizeScale === "compact") {
     scaleInstruction = "modest, subtle compact logo badge size occupying only roughly 10-14% of the canvas height and at most 28-30% canvas width, maintaining huge open margins";
   } else if (sizeScale === "large") {
     scaleInstruction = "prominent large scale occupying approximately 25-30% of the canvas height";
@@ -431,8 +443,8 @@ async function handleFlowGenerateTypography(args) {
   const promptParts = [
     `Keep this exact image, character face, pose, outfit, and background composition completely 100% intact and unchanged.`,
     `Do not alter or redraw the girl/character or the background scene.`,
-    `Overlay an ultra high-quality, professional rhythm game / YouTube thumbnail typography title at the ${placement}.`,
-    `PROPORTION & SIZE SCALE CONTROL: Render the typography title at a ${scaleInstruction}. Keep a wide safety clearance buffer: the title must remain strictly contained in the center gap without spreading towards or crowding the characters, faces, ears, or props on either side. Absolutely never balloon into an oversized giant headline.`
+    `Overlay an ultra high-quality, professional rhythm game / YouTube thumbnail typography title positioned at the ${placementInstruction}.`,
+    `PROPORTION & SIZE SCALE CONTROL: Render the typography title at a ${scaleInstruction}. Keep a wide safety clearance buffer: the title must remain strictly elevated high in the upper headroom, completely clear of the character's head, face, or hair below. Absolutely never balloon into an oversized giant headline or touch the character.`
   ];
 
   if (isKoreanMode) {
@@ -456,8 +468,13 @@ async function handleFlowGenerateTypography(args) {
       subtitleInstruction = `- SUBTITLE: "${subtitle}" placed directly underneath in a compact, well-proportioned font with themed neon rim glow and dark fill.`;
     }
 
+    const lineLayoutInstruction = singleLine
+      ? `- SINGLE HORIZONTAL LINE ARRANGEMENT: Render all syllables of "${title}" strictly across one continuous horizontal row (단일 행/한 줄 가로 배치: [ ${title} ]). Absolutely DO NOT break or wrap into two or more lines.`
+      : "";
+
     promptParts.push(
       `CRITICAL HANGUL TEXT ACCURACY & TYPOGRAPHY INSTRUCTIONS:`,
+      lineLayoutInstruction,
       `- EXACT KOREAN HANGUL TEXT: The main title MUST strictly read "${title}" (Exact syllables: [ ${syllableTokens} ]).`,
       `- ZERO TOLERANCE FOR SPELLING ERRORS: Absolutely DO NOT misspell, alter, add, or drop any Korean syllable blocks (음절), consonants (자음), or vowels (모음).`,
       `- NO WRONG CHARACTERS OR PSEUDO-GLYPHS: Absolutely DO NOT substitute with different Korean letters, do NOT use Chinese hanzi or Japanese kanji/kana, and do NOT generate gibberish or distorted alien Korean glyphs. Every Korean letter must be 100% genuine, grammatically correct, and structurally intact.`,
@@ -654,6 +671,7 @@ const TOOLS = [
         language: { type: "string", description: "타이포그래피 언어 모드 ('auto': 자동 감지, 'ko': 한국어 한글 철자 왜곡 방지 및 자모음 100% 일치 강화 모드, 'en': 기본 영문 대문자 모드). 기본값: 'auto'" },
         sizeScale: { type: "string", description: "타이포그래피 크기 비율 제어 ('auto': 글자 수 기반 과대화 방지 자동 판단, 'compact': 15-20% 아담한 절제 크기, 'balanced': 20-25% 표준 크기, 'large': 30-35% 강조 대형 크기). 기본값: 'auto'" },
         subtitleStyle: { type: "string", description: "서브타이틀 폰트 연출 스타일 ('auto': 영문 시 감각적 손글씨/모던 로고 자유 연출, 'handwritten': 스타일리시 필기체/브러시 손글씨, 'logo': 세련된 디자이너 브랜드 로고, 'matching': 메인 타이틀 매칭). 기본값: 'auto'" },
+        singleLine: { type: "boolean", description: "메인 타이틀을 2줄로 쪼개지 않고 단일 행(1줄)으로 길게 수평 배치할지 여부 (기본값: false)" },
         submit: { type: "boolean", description: "입력 후 생성 시작 버튼을 자동 클릭할지 여부 (기본값: true)" }
       },
       required: ["title"]
