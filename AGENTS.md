@@ -68,12 +68,10 @@
 ## 7. 타이포그래피 과대화 방지 및 적절한 크기(Scale) 자동 판단 파이프라인 (2026-11-27 추가)
 - **문제 진단:** 2~4글자 정도의 짧은 타이틀(예: `명일방주`, `TETORIS`)의 경우, 이미지 생성 모델이 화면 공간을 채우기 위해 타이포그래피를 과도하게 거대하게(화면의 40~50% 이상) 키워 캐릭터나 배경 일러스트를 가리는 문제 발생.
 - **해결 방안 (`sizeScale` 파라미터 및 자동 스케일링 지침):**
-  - **`auto` (기본값):** 글자 수와 레이아웃에 맞춰 세로 비율을 스마트 제어.
-    - 4글자 이하: 화면 높이의 약 20~25%로 엄격하게 절제하여 주변 여백(Breathing room)을 확보하고 캐릭터/배경 아트를 절대 가리지 않음.
-    - 5~8글자: 세로 20% 내외로 자연스러운 가로 확장.
-    - 9글자 이상: 세로 15~20%로 세련된 슬림 디스플레이 로고 스케일링.
-  - **명시적 옵션:** `compact` (15~20% 절제 크기), `balanced` (20~25% 표준 균형 크기), `large` (30~35% 대형 강조).
-  - **프롬프트 제약:** `PROPORTION & SIZE SCALE CONTROL: strictly never oversized, never dominating the entire frame, and leaving clean visual breathing room for the characters and background.`
+  - **`auto` (기본값):** 화면 높이의 약 **12~16%**, 가로 너비 **30~35% 이내**의 아담하고 단정한 타이틀 로고 뱃지 크기로 엄격 절제.
+  - **캐릭터 안전 여백 (Clearance Buffer):** 좌우 캐릭터(포덴코의 얼굴/귀, 엘핀의 손)와 글자 사이에 넉넉한 빈 공간을 유지하도록 명시하여 침범 원천 방지.
+  - **명시적 옵션:** `compact` (10~14% 아담한 뱃지 크기), `balanced` (14~18% 표준 균형 크기), `large` (25~30% 대형 강조).
+  - **프롬프트 제약:** `PROPORTION & SIZE SCALE CONTROL: strictly around 12-16% height, at most 30-35% width, wide safety clearance buffer without crowding characters or faces.`
 
 ## 8. 시도했다가 버린 것 / 주의 (Dead Ends)
 - **`labs.google/fx/tools/flow`:** 예전 Flow 주소. 지금은 `https://flow.google.com/`로 308 리다이렉트된다. 시작 URL은 새 주소를 직접 쓴다.

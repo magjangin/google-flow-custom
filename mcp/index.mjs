@@ -411,20 +411,14 @@ async function handleFlowGenerateTypography(args) {
   const titleLength = title.trim().length;
 
   if (sizeScale === "compact") {
-    scaleInstruction = "tasteful compact scale occupying approximately 15-20% of the canvas height, leaving wide breathing room around the art";
+    scaleInstruction = "modest, subtle compact logo badge size occupying only roughly 10-14% of the canvas height and at most 28-30% canvas width, maintaining huge open margins";
   } else if (sizeScale === "large") {
-    scaleInstruction = "prominent large scale occupying approximately 30-35% of the canvas height";
+    scaleInstruction = "prominent large scale occupying approximately 25-30% of the canvas height";
   } else if (sizeScale === "balanced") {
-    scaleInstruction = "refined balanced medium scale occupying approximately 20-25% of the canvas height, never oversized or ballooning";
+    scaleInstruction = "tasteful, modest medium-compact scale occupying strictly around 14-18% of the canvas height and at most 35% canvas width, never oversized";
   } else {
-    // auto 모드: 짧은 단어일수록 모델이 화면을 꽉 채우려 거대화하므로 스마트 절제
-    if (titleLength <= 4) {
-      scaleInstruction = "refined, well-proportioned medium-compact scale occupying strictly around 20-25% of the canvas height, maintaining ample negative margins so it never balloons into an oversized giant logo";
-    } else if (titleLength <= 8) {
-      scaleInstruction = "balanced medium scale occupying approximately 20% of the canvas height, elegantly proportioned across the frame";
-    } else {
-      scaleInstruction = "sleek horizontal display scale occupying approximately 15-20% of the canvas height, carefully scaled without crowding screen edges";
-    }
+    // auto 모드: 과대화를 방지하는 단정하고 아담한 타이틀 로고 뱃지 크기 (12-16% 세로, 30-35% 가로)
+    scaleInstruction = "tasteful, modest compact rhythm game title badge scale. The total combined typography height (both lines together) must occupy strictly around 12-16% of the overall frame height, and span at most 30-35% of the frame width. It must sit neatly and cleanly with generous empty buffer space on all sides, strictly avoiding huge billboard text";
   }
 
   // 네거티브 스페이스 기본 타깃 글자 (영문에만 적용)
@@ -437,7 +431,7 @@ async function handleFlowGenerateTypography(args) {
     `Keep this exact image, character face, pose, outfit, and background composition completely 100% intact and unchanged.`,
     `Do not alter or redraw the girl/character or the background scene.`,
     `Overlay an ultra high-quality, professional rhythm game / YouTube thumbnail typography title at the ${placement}.`,
-    `PROPORTION & SIZE SCALE CONTROL: Render the typography title at a ${scaleInstruction}. It must feel like an intentional, premium official rhythm game title logo—strictly never oversized, never dominating the entire frame, and leaving clean visual breathing room for the characters and background.`
+    `PROPORTION & SIZE SCALE CONTROL: Render the typography title at a ${scaleInstruction}. Keep a wide safety clearance buffer: the title must remain strictly contained in the center gap without spreading towards or crowding the characters, faces, ears, or props on either side. Absolutely never balloon into an oversized giant headline.`
   ];
 
   if (isKoreanMode) {
