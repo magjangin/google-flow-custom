@@ -397,6 +397,7 @@ async function handleFlowGenerateTypography(args) {
     inferenceReasoning = "",
     language = "auto",
     sizeScale = "auto",
+    subtitleStyle = "auto",
     submit = true
   } = args;
 
@@ -438,6 +439,23 @@ async function handleFlowGenerateTypography(args) {
     // 음절 단위 분해 명시 (예: "뮤즈 대시 2" -> "뮤 - 즈 - 대 - 시 - 2")
     const syllableTokens = Array.from(title.trim()).filter(ch => ch.trim().length > 0).join(" - ");
 
+    // 서브타이틀 처리: 영문 서브타이틀은 한글의 묵직한 서체를 굳이 따라가지 않고, 스타일리시 손글씨/모던 로고 스타일의 자유로운 영문 기본값 연출 허용
+    let subtitleInstruction = "";
+    const isSubtitleEnglish = /[a-zA-Z]/.test(subtitle);
+
+    if (isSubtitleEnglish) {
+      if (subtitleStyle === "handwritten") {
+        subtitleInstruction = `- SUBTITLE: "${subtitle.toUpperCase()}" placed directly underneath in a stylish flowing handwritten cursive / brush script with subtle neon rim glow.`;
+      } else if (subtitleStyle === "logo") {
+        subtitleInstruction = `- SUBTITLE: "${subtitle.toUpperCase()}" placed directly underneath as a sleek modern designer branding logo badge with crisp vector contours and subtle neon rim glow.`;
+      } else {
+        // auto 기본값: 영문 고유의 표현력(손글씨 또는 감각적인 모던 로고)을 자유롭게 발휘하도록 지시
+        subtitleInstruction = `- SUBTITLE (English Design Freedom): "${subtitle.toUpperCase()}" placed directly underneath. It does NOT need to strictly copy the heavy blocky Korean headline—instead, render it freely as a stylish expressive handwritten script or sleek modern designer branding logo with themed neon rim glow and dark bevel. It can naturally feature crisp counter-loop negative space detail inside English letters (${targetLetters}) from the original English preset, creating a dynamic, high-end rhythmic contrast with the Korean title.`;
+      }
+    } else {
+      subtitleInstruction = `- SUBTITLE: "${subtitle}" placed directly underneath in a compact, well-proportioned font with themed neon rim glow and dark fill.`;
+    }
+
     promptParts.push(
       `CRITICAL HANGUL TEXT ACCURACY & TYPOGRAPHY INSTRUCTIONS:`,
       `- EXACT KOREAN HANGUL TEXT: The main title MUST strictly read "${title}" (Exact syllables: [ ${syllableTokens} ]).`,
@@ -445,7 +463,7 @@ async function handleFlowGenerateTypography(args) {
       `- NO WRONG CHARACTERS OR PSEUDO-GLYPHS: Absolutely DO NOT substitute with different Korean letters, do NOT use Chinese hanzi or Japanese kanji/kana, and do NOT generate gibberish or distorted alien Korean glyphs. Every Korean letter must be 100% genuine, grammatically correct, and structurally intact.`,
       `- KOREAN DISPLAY TYPEFACE DESIGN: Render the Korean title "${title}" in a premium, ultra-bold modern Korean rhythm game / K-pop graphic display logo typeface (현대적인 볼드 헤드라인/로고 서체) designed in ${stylePrompt}. Features sharp vector-grade contours, heavy solid weight, intense ${themeColor} neon outer glow, dark bevel finish, bold dual outline borders, and subtle thematic texture.`,
       `- PURE & UNCLUTTERED HANGUL COUNTERS: Absolutely DO NOT embed, carve, or place any symbols, flowers, stars, icons, or negative-space decorations inside the inner loops or counter holes of the Korean Hangul letters (strictly avoid decorating inside ㅇ, ㅁ, ㅂ, ㅍ, ㅎ). All inner letter spaces must be kept completely clean, sharp, solid, and hollow to ensure pristine typographic legibility and uncompromised Korean character recognition.`,
-      `- SUBTITLE: "${subtitle}" placed directly underneath in matching compact bold font with themed neon rim glow and dark fill.`
+      subtitleInstruction
     );
   } else {
     // 기본 영문 최적화 규칙 (영문은 카운터 루프 네거티브 스페이스 적극 활용)
@@ -453,7 +471,7 @@ async function handleFlowGenerateTypography(args) {
       `Typography text arrangement:`,
       `- Line 1 (Main Title): "${title.toUpperCase()}" designed in ${stylePrompt} with intense ${themeColor} neon outer glow, dark bevel finish, bold dual outline borders, and subtle thematic texture.`,
       `- Negative space detail (Clever Counter Loop Art): Seamlessly carve ${symbolIdea} as crisp negative space silhouettes inside the closed counter loops/holes of the English letters (${targetLetters}).`,
-      `- Line 2 (Subtitle): "${subtitle.toUpperCase()}" placed directly underneath in matching compact bold font with themed neon rim glow and dark fill.`
+      `- Line 2 (Subtitle): "${subtitle.toUpperCase()}" placed directly underneath in stylish handwritten script, sleek modern logo lettering, or matching compact bold font with themed neon rim glow and dark fill.`
     );
   }
 
@@ -635,6 +653,7 @@ const TOOLS = [
         inferenceReasoning: { type: "string", description: "시각 분석 및 웹 검색을 통해 도출한 테마/심볼 선정 추론 이유" },
         language: { type: "string", description: "타이포그래피 언어 모드 ('auto': 자동 감지, 'ko': 한국어 한글 철자 왜곡 방지 및 자모음 100% 일치 강화 모드, 'en': 기본 영문 대문자 모드). 기본값: 'auto'" },
         sizeScale: { type: "string", description: "타이포그래피 크기 비율 제어 ('auto': 글자 수 기반 과대화 방지 자동 판단, 'compact': 15-20% 아담한 절제 크기, 'balanced': 20-25% 표준 크기, 'large': 30-35% 강조 대형 크기). 기본값: 'auto'" },
+        subtitleStyle: { type: "string", description: "서브타이틀 폰트 연출 스타일 ('auto': 영문 시 감각적 손글씨/모던 로고 자유 연출, 'handwritten': 스타일리시 필기체/브러시 손글씨, 'logo': 세련된 디자이너 브랜드 로고, 'matching': 메인 타이틀 매칭). 기본값: 'auto'" },
         submit: { type: "boolean", description: "입력 후 생성 시작 버튼을 자동 클릭할지 여부 (기본값: true)" }
       },
       required: ["title"]

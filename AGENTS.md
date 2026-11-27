@@ -73,7 +73,14 @@
   - **명시적 옵션:** `compact` (10~14% 아담한 뱃지 크기), `balanced` (14~18% 표준 균형 크기), `large` (25~30% 대형 강조).
   - **프롬프트 제약:** `PROPORTION & SIZE SCALE CONTROL: strictly around 12-16% height, at most 30-35% width, wide safety clearance buffer without crowding characters or faces.`
 
-## 8. 시도했다가 버린 것 / 주의 (Dead Ends)
+## 8. 서브타이틀 영문 디자인 자율성 및 손글씨/모던 로고 대비 연출 (2026-11-27 추가)
+- **설계 의도:** 한글 메인 타이틀 아래 들어가는 영문 서브타이틀(예: `YOUR STAR`, `CUSTOM CHART`)은 한글의 무겁고 각진 헤드라인 스타일을 굳이 획일적으로 따라갈 필요가 없음.
+- **스타일 분리 및 영문 프리셋 복원:**
+  - **손글씨(Handwritten Script/Cursive) 또는 세련된 디자이너 브랜드 로고(Modern Branding Logo):** 묵직한 한글 헤드라인과 자연스러운 율동감/위계(Hierarchy)를 형성.
+  - **영문 카운터 루프 디테일 자유 활용:** 영문 알파벳의 닫힌 루프(`A, O, R, P, B, D`)에는 기존 영문 프리셋의 테마 심볼 음각 및 네온 림 글로우 효과를 그대로 자유롭게 적용 가능.
+  - **`subtitleStyle` 파라미터:** `auto` (영문 시 손글씨/로고 자유 연출), `handwritten` (필기체/브러시), `logo` (모던 로고), `matching` (메인 타이틀 볼드 폰트 매칭).
+
+## 9. 시도했다가 버린 것 / 주의 (Dead Ends)
 - **`labs.google/fx/tools/flow`:** 예전 Flow 주소. 지금은 `https://flow.google.com/`로 308 리다이렉트된다. 시작 URL은 새 주소를 직접 쓴다.
 - **한글 카운터 홀 속 심볼 음각:** Nano Banana에서 한글 자음(ㅇ, ㅁ, ㅂ) 안쪽에 꽃이나 별 등 네거티브 스페이스 장식을 넣으려 하면 글자 획이 뭉개지거나 글자 형태가 오염됨. 한글은 내부 공간을 깨끗하게 유지해야 선명도가 극대화됨.
 - **빌드 경고 MSB3277 (WindowsBase 4.0 vs 5.0):** `Microsoft.Web.WebView2` 패키지의 WPF 어셈블리 참조 때문. 동작에는 영향 없음.
