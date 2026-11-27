@@ -382,6 +382,7 @@ async function handleFlowUploadMedia(args) {
 /**
  * 유튜브 썸네일 & 리듬게임 커스텀 차트용 알잘딱 타이포그래피 생성 도구
  * (하단 와이드 2단 배치, 네온 아우터 글로우, 이중 외곽선, 네거티브 스페이스 심볼 음각 및 장르/곡 테마 연출)
+ * 한국어 요청 시 한글 철자 왜곡/외계어/오탈자/한자 치환을 원천 차단하는 빡빡한 한글 프롬프트 엔지니어링 적용
  */
 async function handleFlowGenerateTypography(args) {
   const {
@@ -391,23 +392,56 @@ async function handleFlowGenerateTypography(args) {
     symbolIdea = "apple silhouette with stem and leaf in counter holes of letters A and P",
     stylePrompt = "heavy bold textured lettering with intense neon outer glow, dark embossed bevel and double borders",
     placement = "lower wide center foreground across the bottom",
-    negativeSpaceTarget = "A, P, B, O, R",
+    negativeSpaceTarget,
     inferenceReasoning = "",
+    language = "auto",
     submit = true
   } = args;
 
   if (!title) throw new Error("title(곡 또는 작품 메인 제목) 매개변수가 필요합니다.");
 
+  // 언어 감지: 명시적 ko이거나, auto이면서 텍스트에 한글이 포함된 경우
+  const hasKorean = /[ㄱ-ㅎ|ㅏ-ㅣ|가-힣]/.test(title + (subtitle || ""));
+  const isKoreanMode = language === "ko" || (language === "auto" && hasKorean);
+
+  // 네거티브 스페이스 기본 타깃 글자
+  let targetLetters = negativeSpaceTarget;
+  if (!targetLetters) {
+    targetLetters = isKoreanMode ? "ㅇ, ㅁ, ㅂ, ㅍ, ㅎ, 0, 2, 8, B, P, R, D" : "A, P, B, O, R";
+  }
+
   const promptParts = [
     `Keep this exact image, character face, pose, outfit, and background composition completely 100% intact and unchanged.`,
     `Do not alter or redraw the girl/character or the background scene.`,
-    `Overlay an ultra high-quality, professional rhythm game / YouTube thumbnail typography title at the ${placement}.`,
-    `Typography text arrangement:`,
-    `- Line 1 (Main Title): "${title.toUpperCase()}" designed in ${stylePrompt} with intense ${themeColor} neon outer glow, dark bevel finish, bold dual outline borders, and subtle thematic texture.`,
-    `- Negative space detail (Clever Counter Loop Art): Seamlessly carve ${symbolIdea} as crisp negative space silhouettes inside the closed counter loops/holes of the letters (${negativeSpaceTarget}).`,
-    `- Line 2 (Subtitle): "${subtitle.toUpperCase()}" placed directly underneath in matching compact bold font with themed neon rim glow and dark fill.`,
-    `The typography is placed solidly in front, creating rich depth and cinematic rhythm game jacket / YouTube thumbnail poster appeal. Highly legible, sharp, iconic custom chart title design.`
+    `Overlay an ultra high-quality, professional rhythm game / YouTube thumbnail typography title at the ${placement}.`
   ];
+
+  if (isKoreanMode) {
+    // 음절 단위 분해 명시 (예: "뮤즈 대시 2" -> "뮤 - 즈 - 대 - 시 - 2")
+    const syllableTokens = Array.from(title.trim()).filter(ch => ch.trim().length > 0).join(" - ");
+
+    promptParts.push(
+      `CRITICAL HANGUL TEXT ACCURACY & TYPOGRAPHY INSTRUCTIONS:`,
+      `- EXACT KOREAN HANGUL TEXT: The main title MUST strictly read "${title}" (Exact syllables: [ ${syllableTokens} ]).`,
+      `- ZERO TOLERANCE FOR SPELLING ERRORS: Absolutely DO NOT misspell, alter, add, or drop any Korean syllable blocks (음절), consonants (자음), or vowels (모음).`,
+      `- NO WRONG CHARACTERS OR PSEUDO-GLYPHS: Absolutely DO NOT substitute with different Korean letters, do NOT use Chinese hanzi or Japanese kanji/kana, and do NOT generate gibberish or distorted alien Korean glyphs. Every Korean letter must be 100% genuine, grammatically correct, and structurally intact.`,
+      `- KOREAN DISPLAY TYPEFACE DESIGN: Render the Korean title "${title}" in a premium, ultra-bold modern Korean rhythm game / K-pop graphic display logo typeface (현대적인 볼드 헤드라인/로고 서체) designed in ${stylePrompt}. Features sharp vector-grade contours, heavy solid weight, intense ${themeColor} neon outer glow, dark bevel finish, bold dual outline borders, and subtle thematic texture.`,
+      `- NEGATIVE SPACE DETAIL: Seamlessly carve ${symbolIdea} as crisp negative space silhouettes inside the closed counter loops/holes of the glyphs (${targetLetters}) while strictly preserving the legibility and recognizability of the Korean syllables.`,
+      `- SUBTITLE: "${subtitle}" placed directly underneath in matching compact bold font with themed neon rim glow and dark fill.`
+    );
+  } else {
+    // 기본 영문 최적화 규칙
+    promptParts.push(
+      `Typography text arrangement:`,
+      `- Line 1 (Main Title): "${title.toUpperCase()}" designed in ${stylePrompt} with intense ${themeColor} neon outer glow, dark bevel finish, bold dual outline borders, and subtle thematic texture.`,
+      `- Negative space detail (Clever Counter Loop Art): Seamlessly carve ${symbolIdea} as crisp negative space silhouettes inside the closed counter loops/holes of the letters (${targetLetters}).`,
+      `- Line 2 (Subtitle): "${subtitle.toUpperCase()}" placed directly underneath in matching compact bold font with themed neon rim glow and dark fill.`
+    );
+  }
+
+  promptParts.push(
+    `The typography is placed solidly in front, creating rich depth and cinematic rhythm game jacket / YouTube thumbnail poster appeal. Highly legible, sharp, iconic custom chart title design.`
+  );
 
   const prompt = promptParts.join(" ");
   const typeRes = await handleFlowType({ selector: ".ProseMirror", text: prompt, submit });
@@ -416,12 +450,15 @@ async function handleFlowGenerateTypography(args) {
       type: "text",
       text: JSON.stringify({
         status: "success",
-        message: "멀티모달 테마 추론 기반 알잘딱 타이포그래피 프롬프트가 주입되었습니다.",
+        message: isKoreanMode 
+          ? "한국어 한글 글자 왜곡 방지 및 철자 100% 일치 강화 타이포그래피 프롬프트가 주입되었습니다." 
+          : "멀티모달 테마 추론 기반 알잘딱 타이포그래피 프롬프트가 주입되었습니다.",
+        isKoreanMode,
         title,
         subtitle,
         themeColor,
         symbolIdea,
-        negativeSpaceTarget,
+        negativeSpaceTarget: targetLetters,
         inferenceReasoning,
         generatedPrompt: prompt,
         flowTypeResult: typeRes
@@ -564,18 +601,19 @@ const TOOLS = [
   },
   {
     name: "flow_generate_typography",
-    description: "유튜브 썸네일 및 리듬게임 커스텀 차트용 멀티모달 테마 추론 기반 알잘딱 타이포그래피(2단 와이드 하단 배치, 테마 질감/글로우, 네거티브 스페이스 심볼 음각)를 주입하여 생성합니다.",
+    description: "유튜브 썸네일 및 리듬게임 커스텀 차트용 멀티모달 테마 추론 기반 알잘딱 타이포그래피(2단 와이드 하단 배치, 테마 질감/글로우, 네거티브 스페이스 심볼 음각, 한국어 글자 왜곡 방지 강화)를 주입하여 생성합니다.",
     inputSchema: {
       type: "object",
       properties: {
-        title: { type: "string", description: "메인 곡 또는 작품 제목 (예: BAD APPLE, TETORIS, MESMERIZER)" },
+        title: { type: "string", description: "메인 곡 또는 작품 제목 (예: BAD APPLE, TETORIS, 뮤즈 대시 2)" },
         subtitle: { type: "string", description: "서브 타이틀 문구 (기본값: CUSTOM CHART)" },
         themeColor: { type: "string", description: "테마 네온 발광 색상 (예: Crimson Red, Retro Arcade Cyan/Purple, Acid Green)" },
         symbolIdea: { type: "string", description: "글자 카운터(구멍) 안에 들어갈 테마 네거티브 스페이스 심볼 (예: apple silhouette with stem, falling tetramino tetromino block, bunny head silhouette)" },
         stylePrompt: { type: "string", description: "폰트 장르/질감 프롬프트 (예: retro 8-bit arcade brick grid tetromino style, sharp graffiti lettering, glossy holographic cyber pop)" },
-        negativeSpaceTarget: { type: "string", description: "심볼이 음각될 대상 글자 (기본값: A, P, B, O, R)" },
+        negativeSpaceTarget: { type: "string", description: "심볼이 음각될 대상 글자 (영문 기본값: A, P, B, O, R / 한글 기본값: ㅇ, ㅁ, ㅂ, ㅍ, ㅎ, 0, 2, 8, B, P, R, D)" },
         placement: { type: "string", description: "배치 위치 (기본값: lower wide center foreground across the bottom)" },
         inferenceReasoning: { type: "string", description: "시각 분석 및 웹 검색을 통해 도출한 테마/심볼 선정 추론 이유" },
+        language: { type: "string", description: "타이포그래피 언어 모드 ('auto': 자동 감지, 'ko': 한국어 한글 철자 왜곡 방지 및 자모음 100% 일치 강화 모드, 'en': 기본 영문 대문자 모드). 기본값: 'auto'" },
         submit: { type: "boolean", description: "입력 후 생성 시작 버튼을 자동 클릭할지 여부 (기본값: true)" }
       },
       required: ["title"]

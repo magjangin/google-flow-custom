@@ -48,11 +48,20 @@
      > *타이포그래피는 8비트 아케이드 레트로 블록 폰트에 **네거티브 스페이스로 글자(O, R 등) 속에 테트로미노 블록 실루엣**을 음각하고, 하단에 `CUSTOM CHART`를 배치하는 알잘딱 디자인을 추천합니다. 이렇게 제작해 드릴까요?"*
   4. **`flow_generate_typography` 도구 호출:** 사용자가 확인/승인하면 테마에 최적화된 프롬프트로 100% 원본 유지 상태에서 타이포그래피 생성.
 - **표준 레이아웃:** 16:9 와이드 기준 **하단 중앙 와이드 2단 배치 (`placement: "lower wide center foreground across the bottom"`)**.
-  - **1열 (메인 타이틀):** 곡명/작품명 (예: `BAD APPLE`, `TETORIS`) - 테마 질감 폰트 + 테마 네온 아우터 글로우 + 2중 외곽선 스트로크 + 엠보싱 음영.
+  - **1열 (메인 타이틀):** 곡명/작품명 (예: `BAD APPLE`, `TETORIS`, `뮤즈 대시 2`) - 테마 질감 폰트 + 테마 네온 아우터 글로우 + 2중 외곽선 스트로크 + 엠보싱 음영.
   - **2열 (서브 타이틀):** `CUSTOM CHART` (화영왕 채널 커스텀 차트 아이덴티티) - 하단에 컴팩트 볼드로 안착.
-  - **네거티브 스페이스 음각 (알잘딱 센스):** `A`, `P`, `B`, `O`, `R` 등 닫힌 루프(카운터 공간) 내부에 곡의 핵심 모티브(사과, 테트로미노 블록, 토끼 실루엣 등)를 음각으로 정교하게 렌더링.
+  - **네거티브 스페이스 음각 (알잘딱 센스):** `A`, `P`, `B`, `O`, `R` (영문) 또는 `ㅇ`, `ㅁ`, `ㅂ`, `ㅍ`, `ㅎ`, `0`, `2`, `8` (한글/숫자) 등 닫힌 루프(카운터 공간) 내부에 곡의 핵심 모티브(사과, 테트로미노 블록, 토끼 실루엣 등)를 음각으로 정교하게 렌더링.
 
-## 5. 시도했다가 버린 것 / 주의 (Dead Ends)
+## 6. 한국어(한글) 타이포그래피 글자 왜곡 방지 및 철자 100% 일치 강화 파이프라인 (2026-11-27 추가)
+- **배경 및 문제:** AI 생성 모델(Imagen 3, Nano Banana 등)은 영어 텍스트에 비해 한글 텍스트 생성 시 자모 분리, 엉뚱한 한글 글자 치환, 한자/가나 변형, 외계어 글리프 생성(Hallucination)이 잦음.
+- **강화 프롬프트 전략:**
+  1. **정확한 음절 분해 명시:** `EXACT KOREAN HANGUL TEXT: "${title}" (Exact syllables: [ 뮤 - 즈 - 대 - 시 - 2 ])`.
+  2. **오탈자 / 유사 글자 치환 / 외계어 원천 금지 (Zero Tolerance):**
+     `CRITICAL HANGUL TEXT ACCURACY & TYPOGRAPHY INSTRUCTIONS: Absolutely DO NOT misspell, alter, add, or drop any Korean syllable blocks, consonants, or vowels. Absolutely DO NOT substitute with different Korean letters, do NOT use Chinese hanzi or Japanese kanji/kana, and do NOT produce pseudo-Hangul or distorted alien glyphs.`
+  3. **서체 스타일 정의:** 현대적인 K-pop / 리듬게임 그래픽 로고 디스플레이 서체 스타일(`bold modern Korean rhythm game / K-pop graphic display logo typeface`)로 지정하여 가독성과 글자 구조 보존을 극대화.
+  4. **언어 자동 판별 및 파라미터(`language: "auto" | "ko" | "en"`):** 기본 영문 환경을 유지하되, 한글이 포함되거나 사용자가 한국어를 명시 요청할 경우 즉시 한글 강화 파이프라인이 자동 발동.
+
+## 7. 시도했다가 버린 것 / 주의 (Dead Ends)
 - **`labs.google/fx/tools/flow`:** 예전 Flow 주소. 지금은 `https://flow.google.com/`로 308 리다이렉트된다. 시작 URL은 새 주소를 직접 쓴다.
 - **빌드 경고 MSB3277 (WindowsBase 4.0 vs 5.0):** `Microsoft.Web.WebView2` 패키지의 WPF 어셈블리 참조 때문. 동작에는 영향 없음.
 - **일반 button.click() 트리거 실패:** Angular Material Button 및 ProseMirror 상호작용 시 단순 `btn.click()`이 무시될 수 있음. CDP의 `Input.dispatchMouseEvent`로 바운딩 렉트 중심 좌표를 쏴야 안정적으로 동작함.
