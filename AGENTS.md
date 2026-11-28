@@ -169,6 +169,7 @@ dotnet publish "google flow custom/google flow custom.csproj" -c Release -r win-
   - **찾은 요소만** 마스크(별 r+2, 캡슐 둥근 사각형) → 5×5 팽창 → TELEA 인페인팅. **아무것도 못 찾으면(`none`) 픽셀을 건드리지 않음.**
   - `detected_type`: `none` / `single_star` / `star_and_ai` / `ai_only` / `two_stars` / `star_with_ai_spot`.
 - **결과 (41장):** 워터마크 있음 19, 없음 22, **워터마크 없는 이미지 오감지 0**. Your Reality는 `ai_only`로 캡슐만 지워지고 `Soundtrack` 보존.
+- **흰 배경 테두리형 별 (2026-11-28 드림모드 테스트에서 발견·추가):** 순백 배경에서는 흰 별이 배경과 같아 안쪽은 안 보이고 **반지름 33~35의 2px 고리만 밝기 -3~-4 정도 어둡게** 남는다. 상관 점수가 0.006이라 놓쳤음. → 배경이 평평할 때(고리 안팎 표준편차 ≤ 5)만 "고리 밝기 − 배경 중앙값"의 중앙값 ≤ -2 이고 고리 픽셀의 50% 이상이 1 이상 어두우면 별로 판정(`_ring_outline_star`), 마스크는 고리까지 덮게 r+4. 41장 기존 판정은 하나도 안 바뀌고 이 이미지만 새로 잡힘(다른 평평한 샘플은 고리 비율 0~21%).
 - **알려진 한계:** 아주 복잡한 배경(네온 글자 한가운데, 밝은 하늘색 무늬 위)의 옅은 별 몇 개(p5_05, p6_01, p6_08)는 못 찾음 → 원본을 망가뜨리는 것보다 별이 남는 쪽을 택함. 별이 글자 위에 있으면 인페인팅 자국이 약간 남을 수 있음.
 - **다음 개선 후보:** 워터마크는 고정 알파 마스크의 흰색 덮어씌우기라, 평평한 샘플에서 알파 맵을 추정하면 인페인팅 대신 **역알파 합성**(`B = (I − α·255)/(1 − α)`)으로 원본 픽셀을 거의 그대로 되살릴 수 있다.
 
@@ -183,4 +184,5 @@ dotnet publish "google flow custom/google flow custom.csproj" -c Release -r win-
      - **함정:** `flow_click`(좌표 클릭)으로 트리거를 누르면 메뉴가 열렸다 바로 닫힐 때가 있다. `flow_eval`에서 `button.click()` 후 800ms 기다렸다가 항목을 누르는 쪽이 안정적.
   5. `flow_generate_typography(...)` (submit 기본 true) → 약 60~90초 생성
   6. `flow_download_images({filename})` → 워터마크 제거 + 원본 삭제(기본). 결과는 Flow 기본 1376×768.
+- **실측 2 (드림모드, 한글 제목):** `title: "드림모드"`, `language: "ko"` → 철자 정확, 하단 가운데 배치 OK. 다만 타이틀 2줄 합이 화면 높이의 약 24%(규칙 12~16%)로 크게 나왔고 빨간 잠옷 캐릭터의 다리를 일부 가림 — 크기·겹침은 프롬프트 지시를 모델이 완전히 지키지 않는 부분이라, 더 작게 원하면 `sizeScale: "compact"`를 쓸 것.
 - MCP 코드(`index.mjs`)를 고친 뒤 같은 세션에서 바로 확인하려면 `node index.mjs`를 직접 띄워 stdio JSON-RPC(`initialize` → `tools/call`)로 부르면 된다(앱의 CDP 9334에 그대로 붙음).

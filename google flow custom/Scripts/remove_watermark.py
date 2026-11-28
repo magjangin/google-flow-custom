@@ -37,7 +37,12 @@ SEARCH = 6               # 고정 위치 주변 탐색 반경(기준 px)
 STAR_STRONG = 0.45       # 이 이상이면 위치 오차와 상관없이 별로 판정
 STAR_WEAK = 0.16         # 이 이상이면서 위치 오차 ≤ 2px면 별로 판정(네온 글자 위 등 복잡한 배경의 별). 워터마크 없는 샘플의 최대가 0.14
 CAPSULE_MIN = 0.5
-FLAT_STD = 1.5           # 이보다 평평한 영역(흰 배경 등)은 판정하지 않음
+FLAT_STD = 1.5           # 이보다 평평한 영역(흰 배경 등)은 상관 판정을 하지 않음
+# 흰색처럼 평평한 배경 위의 별은 안쪽이 배경과 같고 반지름 33~35 테두리만 2px 정도 살짝 어둡다(실측 -3~-4).
+# 그래서 상관 대신 "그 고리가 한 바퀴 내내 어두운가"를 본다. 복잡한 배경에서는 쓰지 않음(점·글자에 속기 쉬움).
+RING_BG_STD_MAX = 5.0    # 고리 안/밖 배경의 표준편차가 이 이하일 때만
+RING_MEDIAN_MAX = -2.0   # 고리 밝기 − 배경 중앙값의 중앙값
+RING_FRAC_MIN = 0.5      # 고리 픽셀 중 배경보다 1 이상 어두운 비율
 
 _TPL_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "wm_templates")
 
@@ -77,11 +82,31 @@ def _score_at(hp, tpl, cx, cy, search):
     return float(mx), (loc[0] - search, loc[1] - search), float(win.std())
 
 
+def _ring_outline_star(L, cx, cy, s):
+    """평평한 배경 위 '테두리만 보이는' 별 판정. (판정, 정보) 반환"""
+    h, w = L.shape
+    R = int(60 * s) + 2
+    x0, y0 = int(cx) - R, int(cy) - R
+    if x0 < 0 or y0 < 0 or x0 + 2 * R + 1 > w or y0 + 2 * R + 1 > h:
+        return False, {}
+    win = L[y0:y0 + 2 * R + 1, x0:x0 + 2 * R + 1]
+    yy, xx = np.mgrid[0:win.shape[0], 0:win.shape[1]]
+    d = (np.abs(xx + x0 - cx) ** STAR_P + np.abs(yy + y0 - cy) ** STAR_P) ** (1 / STAR_P) / s
+    ring = (d >= 32.5) & (d < 35.5)
+    around = np.concatenate([win[(d >= 22) & (d < 30)], win[(d >= 38) & (d < 46)]])
+    bg_sd = float(around.std())
+    diff = win[ring] - np.median(around)
+    med, frac = float(np.median(diff)), float((diff < -1.0).mean())
+    ok = bg_sd <= RING_BG_STD_MAX and med <= RING_MEDIAN_MAX and frac >= RING_FRAC_MIN
+    return ok, {"ring_median": round(med, 2), "ring_frac": round(frac, 2), "bg_std": round(bg_sd, 2)}
+
+
 def detect_watermarks(img):
     """찾은 워터마크 요소 목록. 요소: {kind, cx, cy, score, ...}"""
     h, w = img.shape[:2]
     s = w / BASE_W
     hp = _highpass(img)
+    L = cv2.cvtColor(img, cv2.COLOR_BGR2LAB)[:, :, 0].astype(np.float32)
     search = max(2, int(round(SEARCH * s)))
     found = []
 
@@ -93,6 +118,10 @@ def detect_watermarks(img):
         exact = abs(ox) <= 2 and abs(oy) <= 2
         if sd >= FLAT_STD and (sc >= STAR_STRONG or (sc >= STAR_WEAK and exact)):
             found.append({"kind": kind, "cx": cx + ox, "cy": cy + oy, "r": STAR_R * s, "score": round(sc, 3)})
+            continue
+        ok, info = _ring_outline_star(L, cx, cy, s)
+        if ok:  # 흰 배경 등: 테두리만 보이는 별 (2026-11-28 드림모드 실측)
+            found.append({"kind": kind, "cx": cx, "cy": cy, "r": STAR_R * s, "score": "ring", "outline": True, **info})
 
     cap = _capsule_template()
     cap = cv2.resize(cap, None, fx=s, fy=s, interpolation=cv2.INTER_AREA)
@@ -109,7 +138,7 @@ def _mask_for(img, found):
     mask = np.zeros((h, w), dtype=np.uint8)
     for f in found:
         if f["kind"].startswith("star"):
-            r = f["r"] + 2
+            r = f["r"] + (4 * f["r"] / STAR_R if f.get("outline") else 2)  # 테두리형은 고리(33~35)까지 덮도록
             yy, xx = np.mgrid[0:h, 0:w]
             d = (np.abs(xx - f["cx"]) ** STAR_P + np.abs(yy - f["cy"]) ** STAR_P) ** (1 / STAR_P)
             mask[d <= r] = 255
