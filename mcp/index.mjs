@@ -1,20 +1,32 @@
 import { spawn } from "node:child_process";
-import { existsSync, readdirSync, statSync, copyFileSync, mkdirSync } from "node:fs";
-import { join } from "node:path";
+import { existsSync, readdirSync, statSync, copyFileSync, mkdirSync, readFileSync } from "node:fs";
+import { writeFile } from "node:fs/promises";
+import { join, dirname, basename, extname } from "node:path";
+import { fileURLToPath } from "node:url";
 import { homedir, tmpdir } from "node:os";
 
 const DEFAULT_PORT = 9334;
+// 저장소 위치를 하드코딩하지 않고 이 파일 위치(mcp/)에서 계산한다.
+// (예전 하드코딩 경로 "...\\bin\Debug\\..."는 JS에서 "\D"가 "D"로 풀려 Debug 빌드를 영영 못 찾았다)
+const REPO_ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 const DEFAULT_EXE_PATHS = [
-  "H:\\source\\repos\\google flow custom\\publish\\win-x64\\google flow custom.exe",
-  "H:\\source\\repos\\google flow custom\\google flow custom\\bin\Debug\\net10.0\\google flow custom.exe"
+  join(REPO_ROOT, "publish", "win-x64", "google flow custom.exe"),
+  join(REPO_ROOT, "google flow custom", "bin", "Release", "net10.0", "google flow custom.exe"),
+  join(REPO_ROOT, "google flow custom", "bin", "Debug", "net10.0", "google flow custom.exe")
 ];
 const DOWNLOADS_DIR = join(homedir(), "Downloads", "GoogleFlow_Downloads");
-const WATERMARK_SCRIPT_PATH = "H:\\source\\repos\\google flow custom\\google flow custom\\Scripts\\remove_watermark.py";
+const WATERMARK_SCRIPT_PATH = join(REPO_ROOT, "google flow custom", "Scripts", "remove_watermark.py");
 
+/**
+ * remove_watermark.py 실행. targetPath는 파일 경로, 폴더 경로, 또는 파일 경로 배열(한 번의 python 실행으로 일괄 처리).
+ * python + OpenCV 기동이 1초 가까이 걸리므로 여러 장은 배열로 넘겨 프로세스를 한 번만 띄운다.
+ */
 function runWatermarkRemover(targetPath, isDir = false, deleteOriginal = true, outputPath = null) {
   return new Promise((resolve, reject) => {
     const pyArgs = [WATERMARK_SCRIPT_PATH];
-    if (isDir) {
+    if (Array.isArray(targetPath)) {
+      pyArgs.push("--files", ...targetPath);
+    } else if (isDir) {
       pyArgs.push("--dir", targetPath);
     } else {
       pyArgs.push("--file", targetPath);
@@ -26,11 +38,19 @@ function runWatermarkRemover(targetPath, isDir = false, deleteOriginal = true, o
       pyArgs.push("--delete-original");
     }
 
-    const py = spawn("python", pyArgs, { stdio: ["ignore", "pipe", "pipe"] });
+    // PYTHONUTF8: 파이프 출력이 cp949로 나가면 한글 파일명이 깨지거나 UnicodeEncodeError로 죽는다.
+    const py = spawn("python", pyArgs, {
+      stdio: ["ignore", "pipe", "pipe"],
+      env: { ...process.env, PYTHONUTF8: "1", PYTHONIOENCODING: "utf-8" }
+    });
     let stdout = "";
     let stderr = "";
+    py.stdout.setEncoding("utf8");
+    py.stderr.setEncoding("utf8");
     py.stdout.on("data", chunk => stdout += chunk);
     py.stderr.on("data", chunk => stderr += chunk);
+    // python이 PATH에 없으면 'error' 이벤트가 나는데, 리스너가 없으면 MCP 프로세스 전체가 죽는다.
+    py.on("error", err => reject(new Error(`python 실행 실패: ${err.message} (PATH에 python과 opencv-python, numpy 필요)`)));
     py.on("close", code => {
       if (code !== 0) {
         reject(new Error(`워터마크 제거 스크립트 실행 실패 (코드 ${code}): ${stderr}`));
@@ -50,7 +70,7 @@ let nextReqId = 1;
 
 async function getPages(port = DEFAULT_PORT) {
   try {
-    const res = await fetch(`http://127.0.0.1:${port}/json`);
+    const res = await fetch(`http://127.0.0.1:${port}/json`, { signal: AbortSignal.timeout(1500) });
     if (!res.ok) return null;
     return await res.json();
   } catch {
@@ -67,6 +87,7 @@ async function ensureAppRunning(port = DEFAULT_PORT) {
     throw new Error("google flow custom.exe 실행 파일을 찾을 수 없습니다.");
   }
 
+  let spawnError = null;
   const child = spawn(exePath, [], {
     detached: true,
     stdio: "ignore",
@@ -75,12 +96,14 @@ async function ensureAppRunning(port = DEFAULT_PORT) {
       WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS: `--remote-debugging-port=${port}`
     }
   });
+  child.on("error", err => { spawnError = err; }); // 리스너가 없으면 실행 실패 시 MCP 프로세스가 죽는다
   child.unref();
 
-  // 최대 15초 대기
+  // 최대 15초 대기 (짧게 자주 확인해 준비되는 즉시 반환)
   const start = Date.now();
   while (Date.now() - start < 15000) {
-    await new Promise(r => setTimeout(r, 800));
+    await new Promise(r => setTimeout(r, 400));
+    if (spawnError) throw new Error(`앱 실행 실패: ${spawnError.message}`);
     pages = await getPages(port);
     if (pages && pages.length > 0) {
       return { port, pages };
@@ -109,9 +132,12 @@ async function getActiveWs(port = DEFAULT_PORT) {
 
   const ws = new WebSocket(target.webSocketDebuggerUrl);
   await new Promise((resolve, reject) => {
-    ws.onopen = resolve;
-    ws.onerror = reject;
+    const timer = setTimeout(() => reject(new Error("CDP WebSocket 연결 시간 초과")), 5000);
+    ws.onopen = () => { clearTimeout(timer); resolve(); };
+    ws.onerror = () => { clearTimeout(timer); reject(new Error("CDP WebSocket 연결 실패")); };
   });
+  // 앱을 껐다 켜면 예전 소켓이 닫힌다. 닫힌 소켓을 붙잡고 있지 않도록 비운다.
+  ws.onclose = () => { if (activeWs === ws) activeWs = null; };
 
   activeWs = ws;
   return ws;
@@ -225,21 +251,27 @@ async function handleFlowClick(args) {
   if (!selector) throw new Error("selector 매개변수가 필요합니다.");
   const ws = await getActiveWs();
   
-  // 1. 요소 위치 및 태그 정보 조회
+  // 1. 요소 위치 및 태그 정보 조회.
+  // 좌표 클릭이 실제로 그 요소에 닿는지(elementFromPoint) 함께 확인한다.
+  const sel = JSON.stringify(selector);
   const locateScript = `(() => {
-    let el = document.querySelector(${JSON.stringify(selector)});
+    let el = null;
+    try { el = document.querySelector(${sel}); } catch (e) { /* 텍스트를 선택자로 넘긴 경우 */ }
     if (!el) {
       const buttons = Array.from(document.querySelectorAll('button, a, [role="button"], [aria-label]'));
-      el = buttons.find(b => (b.innerText || '').includes(${JSON.stringify(selector)}) || b.getAttribute('aria-label') === ${JSON.stringify(selector)});
+      el = buttons.find(b => (b.innerText || '').includes(${sel}) || b.getAttribute('aria-label') === ${sel});
     }
     if (!el) return null;
     el.scrollIntoView({ block: 'center' });
     const rect = el.getBoundingClientRect();
+    const x = rect.x + rect.width / 2, y = rect.y + rect.height / 2;
+    const hit = document.elementFromPoint(x, y);
+    window.__flowClickTarget = el;
     return {
       tagName: el.tagName,
-      text: el.innerText,
-      x: rect.x + rect.width / 2,
-      y: rect.y + rect.height / 2
+      text: (el.innerText || '').slice(0, 200),
+      x, y,
+      hitsTarget: !!hit && (hit === el || el.contains(hit) || hit.contains(el))
     };
   })()`;
 
@@ -258,8 +290,12 @@ async function handleFlowClick(args) {
     };
   }
 
-  // 2. CDP 마우스 이벤트로 정확한 물리 클릭 발생 (Angular/Material/ProseMirror 대응)
-  if (targetInfo.x > 0 && targetInfo.y > 0) {
+  // 2. CDP 마우스 이벤트로 정확한 물리 클릭 발생 (Angular/Material/ProseMirror 대응).
+  // 예전에는 물리 클릭 뒤에 JS el.click()을 "폴백"으로 또 보내서 한 번에 두 번 눌렸다
+  // → 메뉴 트리거가 열렸다 바로 닫히는 증상(AGENTS.md 16절 함정)의 원인. 이제 둘 중 하나만 보낸다.
+  let method = "js";
+  if (targetInfo.hitsTarget && targetInfo.x > 0 && targetInfo.y > 0) {
+    method = "mouse";
     await sendCdp(ws, "Input.dispatchMouseEvent", {
       type: "mousePressed",
       x: Math.round(targetInfo.x),
@@ -274,24 +310,17 @@ async function handleFlowClick(args) {
       button: "left",
       clickCount: 1
     });
+  } else {
+    // 3. 좌표가 다른 요소(오버레이 등)에 가려졌거나 화면 밖이면 JS 클릭만 보낸다.
+    await sendCdp(ws, "Runtime.evaluate", {
+      expression: `(() => { const el = window.__flowClickTarget; if (el) el.click(); })()`
+    });
   }
-
-  // 3. JS 클릭도 폴백으로 트리거
-  await sendCdp(ws, "Runtime.evaluate", {
-    expression: `(() => {
-      let el = document.querySelector(${JSON.stringify(selector)});
-      if (!el) {
-        const buttons = Array.from(document.querySelectorAll('button, a, [role="button"], [aria-label]'));
-        el = buttons.find(b => (b.innerText || '').includes(${JSON.stringify(selector)}) || b.getAttribute('aria-label') === ${JSON.stringify(selector)});
-      }
-      if (el) el.click();
-    })()`
-  });
 
   return {
     content: [{
       type: "text",
-      text: JSON.stringify({ success: true, ...targetInfo }, null, 2)
+      text: JSON.stringify({ success: true, method, ...targetInfo }, null, 2)
     }]
   };
 }
@@ -361,8 +390,6 @@ async function handleFlowUploadMedia(args) {
   }
 
   const ws = await getActiveWs();
-  const { readFileSync } = await import("node:fs");
-  const { basename, extname } = await import("node:path");
 
   // 파일을 Base64로 인코딩하여 DataTransfer 드래그앤드롭으로 안정적 주입
   const fileDataList = files.map(filePath => {
@@ -378,13 +405,9 @@ async function handleFlowUploadMedia(args) {
     const filesToDrop = ${JSON.stringify(fileDataList)};
     const dt = new DataTransfer();
     for (const f of filesToDrop) {
-      const byteChars = atob(f.b64);
-      const byteNumbers = new Array(byteChars.length);
-      for (let i = 0; i < byteChars.length; i++) {
-        byteNumbers[i] = byteChars.charCodeAt(i);
-      }
-      const byteArray = new Uint8Array(byteNumbers);
-      const file = new File([byteArray], f.name, { type: f.mime });
+      // 일반 배열을 거치지 않고 바로 바이트로 (수 MB 이미지에서 메모리·시간 절약)
+      const blob = await (await fetch('data:' + f.mime + ';base64,' + f.b64)).blob();
+      const file = new File([blob], f.name, { type: f.mime });
       dt.items.add(file);
     }
 
@@ -574,7 +597,7 @@ async function handleFlowScreenshot(args) {
   const buffer = Buffer.from(cdpRes.data, "base64");
   const filename = `flow_screenshot_${Date.now()}.png`;
   const outPath = args?.savePath || join(tmpdir(), filename);
-  await import("node:fs/promises").then(fs => fs.writeFile(outPath, buffer));
+  await writeFile(outPath, buffer);
 
   return {
     content: [
@@ -591,22 +614,17 @@ async function handleFlowGetDownloads(args) {
     return { content: [{ type: "text", text: `다운로드 폴더가 아직 존재하지 않습니다: ${DOWNLOADS_DIR}` }] };
   }
 
-  // 워터마크 일괄 제거 요청 시
+  // 워터마크 일괄 제거 요청 시 (오류는 삼키지 않고 결과에 담아 돌려준다)
+  let watermarkResult = null;
   if (args?.removeWatermarks) {
     try {
-      await runWatermarkRemover(DOWNLOADS_DIR, true, true);
+      watermarkResult = await runWatermarkRemover(DOWNLOADS_DIR, true, true);
     } catch (err) {
-      // 워터마크 제거 중 오류 발생 시 로깅만 하고 계속 진행
+      watermarkResult = { error: err.message };
     }
   }
 
-  const files = readdirSync(DOWNLOADS_DIR)
-    .map(name => {
-      const fullPath = join(DOWNLOADS_DIR, name);
-      const stat = statSync(fullPath);
-      return { name, path: fullPath, mtime: stat.mtimeMs, size: stat.size };
-    })
-    .sort((a, b) => b.mtime - a.mtime);
+  const files = listFiles(DOWNLOADS_DIR);
 
   const destFolder = args?.destinationFolder;
   let copied = [];
@@ -625,10 +643,28 @@ async function handleFlowGetDownloads(args) {
       text: JSON.stringify({
         downloadsDir: DOWNLOADS_DIR,
         recentFiles: files.slice(0, 10),
-        copied
+        copied,
+        ...(watermarkResult ? { watermarkResult } : {})
       }, null, 2)
     }]
   };
+}
+
+/** 폴더 안의 파일만(하위 폴더 제외) 최신순으로 */
+function listFiles(dir) {
+  return readdirSync(dir, { withFileTypes: true })
+    .filter(e => e.isFile())
+    .map(e => {
+      const fullPath = join(dir, e.name);
+      const stat = statSync(fullPath);
+      return { name: e.name, path: fullPath, mtime: stat.mtimeMs, size: stat.size };
+    })
+    .sort((a, b) => b.mtime - a.mtime);
+}
+
+/** 에이전트가 준 파일명에서 경로 부분을 떼어 다운로드 폴더 밖으로 나가지 못하게 한다 */
+function safeFileName(name) {
+  return basename(String(name)).replace(/[<>:"/\\|?*\x00-\x1f]/g, "_");
 }
 
 /**
@@ -639,7 +675,8 @@ async function handleFlowRemoveWatermarks(args) {
   const targetPath = args?.path || DOWNLOADS_DIR;
   const deleteOriginal = args?.deleteOriginal !== false; // 기본값: true (워터마크 원본 삭제)
   const outputFilename = args?.outputFilename || args?.outputName || args?.filename;
-  const outputPath = args?.outputPath || (outputFilename ? join(DOWNLOADS_DIR, outputFilename.endsWith(".png") ? outputFilename : outputFilename + ".png") : null);
+  const safeOut = outputFilename ? safeFileName(outputFilename) : null;
+  const outputPath = args?.outputPath || (safeOut ? join(DOWNLOADS_DIR, safeOut.toLowerCase().endsWith(".png") ? safeOut : safeOut + ".png") : null);
 
   if (!existsSync(targetPath)) {
     throw new Error(`대상을 찾을 수 없습니다: ${targetPath}`);
@@ -722,7 +759,6 @@ async function handleFlowDownloadImages(args) {
   }
 
   const downloadedFiles = [];
-  const fsPromises = await import("node:fs/promises");
 
   // 2. 에이전트가 설정한 파일명으로 다운로드 폴더에 저장
   for (const item of extracted) {
@@ -740,22 +776,25 @@ async function handleFlowDownloadImages(args) {
       fname = `${prefix}_${String(item.index + 1).padStart(2, '0')}.png`;
     }
 
+    fname = safeFileName(fname);
     if (!fname.toLowerCase().endsWith(".png")) fname += ".png";
 
     const fullPath = join(DOWNLOADS_DIR, fname);
     const buf = Buffer.from(item.b64, "base64");
-    await fsPromises.writeFile(fullPath, buf);
+    await writeFile(fullPath, buf);
     downloadedFiles.push({ path: fullPath, name: fname });
   }
 
-  // 3. 워터마크 인페인팅 복원 스크립트 실행 (워터마크 원본 사진 자동 삭제)
-  const inpaintResults = [];
-  for (const fObj of downloadedFiles) {
+  // 3. 워터마크 인페인팅 복원 스크립트 실행 (워터마크 원본 사진 자동 삭제).
+  // 예전에는 파일마다 python을 새로 띄웠다(장당 ~1초 기동). 이제 한 번에 넘긴다.
+  let inpaintResults = [];
+  if (downloadedFiles.length > 0) {
     try {
-      const res = await runWatermarkRemover(fObj.path, false, deleteOriginal);
-      inpaintResults.push({ name: fObj.name, path: fObj.path, result: res });
+      const res = await runWatermarkRemover(downloadedFiles.map(f => f.path), false, deleteOriginal);
+      const list = Array.isArray(res?.results) ? res.results : [];
+      inpaintResults = downloadedFiles.map((f, i) => ({ name: f.name, path: f.path, result: list[i] ?? res }));
     } catch (err) {
-      inpaintResults.push({ name: fObj.name, path: fObj.path, error: err.message });
+      inpaintResults = downloadedFiles.map(f => ({ name: f.name, path: f.path, error: err.message }));
     }
   }
 
