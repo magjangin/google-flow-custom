@@ -788,15 +788,28 @@ async function handleFlowDownloadImages(args) {
 
   // 3. 워터마크 인페인팅 복원 스크립트 실행 (워터마크 원본 사진 자동 삭제).
   // 예전에는 파일마다 python을 새로 띄웠다(장당 ~1초 기동). 이제 한 번에 넘긴다.
+  if (downloadedFiles.length === 0) {
+    const errors = extracted.filter(e => e.error).map(e => `[${e.index}] ${e.error}`);
+    return {
+      content: [{
+        type: "text",
+        text: JSON.stringify({
+          status: "warning",
+          message: "화면에서 이미지를 추출했으나 저장 가능한 이미지 데이터가 없습니다.",
+          extractedCount: extracted.length,
+          errors: errors.length > 0 ? errors : undefined
+        }, null, 2)
+      }]
+    };
+  }
+
   let inpaintResults = [];
-  if (downloadedFiles.length > 0) {
-    try {
-      const res = await runWatermarkRemover(downloadedFiles.map(f => f.path), false, deleteOriginal);
-      const list = Array.isArray(res?.results) ? res.results : [];
-      inpaintResults = downloadedFiles.map((f, i) => ({ name: f.name, path: f.path, result: list[i] ?? res }));
-    } catch (err) {
-      inpaintResults = downloadedFiles.map(f => ({ name: f.name, path: f.path, error: err.message }));
-    }
+  try {
+    const res = await runWatermarkRemover(downloadedFiles.map(f => f.path), false, deleteOriginal);
+    const list = Array.isArray(res?.results) ? res.results : [];
+    inpaintResults = downloadedFiles.map((f, i) => ({ name: f.name, path: f.path, result: list[i] ?? res }));
+  } catch (err) {
+    inpaintResults = downloadedFiles.map(f => ({ name: f.name, path: f.path, error: err.message }));
   }
 
   return {

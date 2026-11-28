@@ -198,9 +198,18 @@ def remove_watermark_from_image(input_path, output_path=None, delete_original=Fa
 
     # 한글 경로 지원을 위해 np.fromfile 사용
     img_data = np.fromfile(input_path, dtype=np.uint8)
-    img = cv2.imdecode(img_data, cv2.IMREAD_COLOR)
-    if img is None:
+    raw_img = cv2.imdecode(img_data, cv2.IMREAD_UNCHANGED)
+    if raw_img is None:
         raise ValueError(f"이미지를 디코딩할 수 없습니다: {input_path}")
+
+    # RGBA 투명 채널이 있는 경우 BGR과 Alpha 분리 처리
+    has_alpha = raw_img.ndim == 3 and raw_img.shape[2] == 4
+    if has_alpha:
+        img = raw_img[:, :, :3]
+        alpha = raw_img[:, :, 3]
+    else:
+        img = raw_img if raw_img.ndim == 3 else cv2.cvtColor(raw_img, cv2.COLOR_GRAY2BGR)
+        alpha = None
 
     mask, detected_type = detect_and_create_watermark_mask(img)
 
@@ -220,7 +229,11 @@ def remove_watermark_from_image(input_path, output_path=None, delete_original=Fa
                 "detected_type": detected_type, "original_deleted": False, "rewritten": False}
 
     # 워터마크가 없으면 픽셀을 건드리지 않는다(원본 그대로 저장/유지)
-    restored = img if detected_type == "none" else cv2.inpaint(img, mask, 3, cv2.INPAINT_TELEA)
+    if detected_type == "none":
+        restored = raw_img
+    else:
+        inpainted_bgr = cv2.inpaint(img, mask, 3, cv2.INPAINT_TELEA)
+        restored = cv2.merge([inpainted_bgr, alpha]) if has_alpha else inpainted_bgr
 
     # 임시 파일로 저장 후 원본 교체 또는 저장
     ext = os.path.splitext(output_path)[1]

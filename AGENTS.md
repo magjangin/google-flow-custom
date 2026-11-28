@@ -218,6 +218,8 @@ dotnet publish "google flow custom/google flow custom.csproj" -c Release -r win-
 | `index.mjs` `flow_get_downloads` | `removeWatermarks: true`의 오류를 조용히 삼킴, 하위 폴더도 파일처럼 나열 | 결과에 `watermarkResult`(또는 `error`)를 담음, 파일만 나열 |
 | `index.mjs` 파일명 인자 | `filename`/`filenames`/`outputFilename`에 `..\` 같은 경로가 들어오면 다운로드 폴더 밖에 써짐, `flow_download_images`에서 복수 이미지일 때 단일 `filename`이 무시되고 기본 prefix로 돌아감 | `safeFileName`으로 경로 제거, 복수 이미지 시에도 지정 `filename` 기반 연번(`base_01.png`, `base_02.png`) 유지 |
 | `mcp/package.json` | mcp 디렉터리에 package.json 부재로 모듈 타입 및 테스트 스크립트 표준 부재 | `google-flow-custom-mcp` v1.1.0 package.json 생성 및 .gitignore에 node_modules 등록 |
+| `remove_watermark.py` 투명도 보존 | RGBA 4채널 투명 이미지를 `IMREAD_COLOR`로 읽어 투명도가 유실되는 문제 | `IMREAD_UNCHANGED`로 읽고 Alpha 분리 후 복원 BGR과 재병합해 투명도 100% 보존 |
+| `index.mjs` `flow_download_images` | 캔버스 추출 오류로 이미지가 0장 다운로드되었을 때 상세 사유 없이 조용히 넘어감 | 추출된 에러 목록(`errors`)을 포함한 명확한 warning 반환 |
 | `remove_watermark.py` 제자리 교체 | 원본을 **먼저 지운 뒤** 임시 파일을 옮김 → 그 사이 실패하면 원본 손실 | 임시 파일에 쓰고 `os.replace` 한 번 |
 | `remove_watermark.py` 워터마크 없음 | `none`이어도 원본을 다시 인코딩해 덮어씀(JPG는 매번 화질 손실, 수정 시각 변경) | 제자리 교체 + `none`이면 파일을 건드리지 않음(`rewritten: false`) |
 | `remove_watermark.py` 폴더 처리 | `_clean.png`만 건너뛰어 `_clean.jpg`를 다시 처리 | 확장자 무관 `*_clean.*` 건너뜀 |
