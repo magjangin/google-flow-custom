@@ -49,7 +49,7 @@
   - `flow_upload_media`: Image-to-Image 합성을 위한 로컬 소재 DataTransfer 일괄 업로드
   - `flow_navigate`: Flow 창 안에서 URL 이동 (프로젝트 열기 등)
   - `flow_eval`: Flow 페이지 콘텍스트에서 JavaScript 실행 (DOM 조사·세부 조작)
-  - `flow_generate_typography`: 유튜브 썸네일 & 리듬게임 커스텀 차트 전용 2단 와이드 네온 타이포그래피 자동 생성 (하단/상단 **가운데** 배치, 위치·여백 지시가 항상 같은 방향)
+  - `flow_generate_typography`: 유튜브 썸네일 & 리듬게임 커스텀 차트 전용 2단 와이드 네온 타이포그래피 자동 생성 (하단/상단 **가운데** 배치, 캐릭터 몸과는 겹쳐도 되지만 **얼굴은 절대 가리지 않음**)
   - `flow_screenshot`: 실시간 생성 상태 모니터링 캡처
   - `flow_get_downloads`: 생성물 자동 수집 및 로컬 동기화
   - `flow_download_images`: 현재 화면의 생성 이미지를 원하는 파일명으로 일괄 다운로드 + 워터마크 자동 제거
@@ -139,7 +139,9 @@ google-flow-custom/
 │   └── Assets/
 │       └── icon.png / icon.ico     # 애플리케이션 아이콘
 ├── mcp/
-│   └── index.mjs                   # CDP 기반 Antigravity/Claude Code MCP 서버
+│   ├── index.mjs                   # CDP 기반 Antigravity/Claude Code MCP 서버
+│   └── scripts/
+│       └── check_typography_prompt.mjs  # Flow 없이 배치별 타이포 프롬프트 점검 (크레딧 안 듦)
 ├── publish/win-x64/                # 단일 실행 파일 빌드 산출물
 ├── docs/badges/                    # 로컬 렌더링용 SVG 배지
 ├── AGENTS.md                       # 멀티 에이전트 인수인계 문서

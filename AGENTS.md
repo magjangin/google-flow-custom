@@ -71,6 +71,7 @@
 - **해결 방안 (`sizeScale` 파라미터 및 자동 스케일링 지침):**
   - **`auto` (기본값):** 화면 높이의 약 **12~16%**, 가로 너비 **30~35% 이내**의 아담하고 단정한 타이틀 로고 뱃지 크기로 엄격 절제.
   - **캐릭터 안전 여백 (Clearance Buffer):** 좌우 캐릭터(포덴코의 얼굴/귀, 엘핀의 손)와 글자 사이에 넉넉한 빈 공간을 유지하도록 명시하여 침범 원천 방지.
+    - ⚠️ 2026-11-28부터 **얼굴만 보호, 몸은 겹쳐도 됨**으로 바뀜(17절).
   - **명시적 옵션:** `compact` (10~14% 아담한 뱃지 크기), `balanced` (14~18% 표준 균형 크기), `large` (25~30% 대형 강조).
   - **프롬프트 제약:** `PROPORTION & SIZE SCALE CONTROL: strictly around 12-16% height, at most 30-35% width, wide safety clearance buffer without crowding characters or faces.`
 
@@ -104,6 +105,7 @@ $env:WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS = "--remote-debugging-port=9334"; Sta
 
 ## 11. 상단 최상단(High-Top) 헤드룸 밀어올림 및 단일 행(1줄) 슬림 가로 배치 파이프라인 (2026-11-27 추가)
 - **배경:** 모델에게 단순 `top`을 지시하면 캔버스 중앙부(Center)나 캐릭터 머리 바로 위까지 내려앉아 캐릭터 얼굴이나 머리를 압박하는 문제 발생.
+- ⚠️ 아래의 "머리·귀·어깨·모자 위 15-20% 여백" 지시는 2026-11-28에 **얼굴만 피하는 규칙(17절)**으로 완화됨. 상단 배치는 지금 `high upper headroom near the top border ..., above the characters' faces`.
 - **상단 배치 물리적 좌표 지침 정밀화:**
   - 상단(`top`, `upper`, `high`) 지정 시 `very high upper top headroom strictly near the top ceiling border of the frame, well elevated high above any character heads, hair, ears, shoulders, or hats, keeping a generous empty vertical gap of at least 15-20% frame height above the characters`로 강제.
 - **단일 행(1줄) 가로 배치 (`singleLine: true`):**
@@ -142,7 +144,7 @@ dotnet publish "google flow custom/google flow custom.csproj" -c Release -r win-
   2. 하단 배치 문장(`lower wide foreground across the bottom edge`)에 **가운데 정렬 지시가 없었음**.
   3. `slim`/`singleLine` 크기 문장이 항상 `near the top border`.
   4. 한글 감지 정규식 `[ㄱ-ㅎ|ㅏ-ㅣ|가-힣]` — 문자 클래스 안 `|`는 글자 그 자체라 제목에 `|`가 있으면 한글 모드로 오판.
-- **수정:** `placementInstruction`과 `clearanceInstruction`을 **같은 분기에서 함께** 만든다(상단=천장 쪽·머리 위 여백 / 하단=바닥 쪽·얼굴 아래·좌우 구석 금지 / 그 외=얼굴만 피하기). 상·하단 모두 `horizontally centered on the frame's vertical center line` 명시. slim 문장도 배치 방향을 따름. 정규식은 `[ㄱ-ㅎㅏ-ㅣ가-힣]`.
+- **수정:** `placementInstruction`과 `clearanceInstruction`을 **같은 분기에서 함께** 만든다(상단=천장 쪽 / 하단=바닥 쪽·좌우 구석 금지 / 그 외=위치 문구 그대로). 여백 규칙 자체는 17절의 얼굴 보호 규칙으로 통일. 상·하단 모두 `horizontally centered on the frame's vertical center line` 명시. slim 문장도 배치 방향을 따름. 정규식은 `[ㄱ-ㅎㅏ-ㅣ가-힣]`.
 - **규칙:** 위치 관련 문장을 새로 넣을 때는 반드시 `isTopPlacement`/`isBottomPlacement` 분기 안에서 만들 것. 프롬프트 어딘가에 고정 방향 문장이 남으면 모델은 둘 중 하나를 임의로 고른다.
 - 도구 설명(스키마)의 `sizeScale` 숫자도 실제 코드 값(auto 12-16% / compact 10-14% / balanced 14-18% / large 25-30% / slim 6-9%)으로 맞춤.
 - **실측 확인 (2026-11-28):** 같은 원본·같은 인자로 다시 생성 → 수정 전 왼쪽 아래 구석이던 타이틀이 **하단 가운데**(좌우 여백 균형, 모니카 얼굴 아래)로 들어감. 다운로드 시 새 워터마크 감지가 `ai_only`로 캡슐만 지워 `Official Soundtrack` 보존. 결과: `Downloads\GoogleFlow_Downloads\YOUR_REALITY_타이포테스트_v2.png`.
@@ -184,5 +186,17 @@ dotnet publish "google flow custom/google flow custom.csproj" -c Release -r win-
      - **함정:** `flow_click`(좌표 클릭)으로 트리거를 누르면 메뉴가 열렸다 바로 닫힐 때가 있다. `flow_eval`에서 `button.click()` 후 800ms 기다렸다가 항목을 누르는 쪽이 안정적.
   5. `flow_generate_typography(...)` (submit 기본 true) → 약 60~90초 생성
   6. `flow_download_images({filename})` → 워터마크 제거 + 원본 삭제(기본). 결과는 Flow 기본 1376×768.
-- **실측 2 (드림모드, 한글 제목):** `title: "드림모드"`, `language: "ko"` → 철자 정확, 하단 가운데 배치 OK. 다만 타이틀 2줄 합이 화면 높이의 약 24%(규칙 12~16%)로 크게 나왔고 빨간 잠옷 캐릭터의 다리를 일부 가림 — 크기·겹침은 프롬프트 지시를 모델이 완전히 지키지 않는 부분이라, 더 작게 원하면 `sizeScale: "compact"`를 쓸 것.
+- **실측 2 (드림모드, 한글 제목):** `title: "드림모드"`, `language: "ko"` → 철자 정확, 하단 가운데 배치 OK. 다만 타이틀 2줄 합이 화면 높이의 약 24%(규칙 12~16%)로 크게 나옴 — 크기는 모델이 완전히 지키지 않는 부분이라, 더 작게 원하면 `sizeScale: "compact"`를 쓸 것. 빨간 잠옷 캐릭터의 다리를 일부 가린 것은 17절 규칙상 허용(얼굴은 가리지 않음).
 - MCP 코드(`index.mjs`)를 고친 뒤 같은 세션에서 바로 확인하려면 `node index.mjs`를 직접 띄워 stdio JSON-RPC(`initialize` → `tools/call`)로 부르면 된다(앱의 CDP 9334에 그대로 붙음).
+
+## 17. 얼굴 보호 규칙 — 몸은 겹쳐도 되고 얼굴만 절대 가리지 않기 (2026-11-28 사용자 결정)
+- **배경:** 드림모드 테스트에서 타이틀이 캐릭터 다리를 일부 가렸는데, 사용자 판단은 "상체·하체 가리는 건 괜찮다. 얼굴을 가리면 안 된다."
+- **이전 규칙:** 하단은 "모든 캐릭터의 얼굴과 **상체** 아래", 상단은 "머리·머리카락·귀·**어깨**·모자 위 15-20% 여백", 마지막에 "캐릭터에 **닿지** 말 것" → 몸 전체를 피하라는 지시라 자리가 부족하고 정작 중요한 것(얼굴)이 묻힘.
+- **현재 규칙 (`mcp/index.mjs` `FACE_RULE` 상수, 모든 배치에 공통):**
+  > the title may freely overlap characters' bodies (torso, arms, hands, legs, clothing, or the ends of long hair), but it must NEVER cover, cross, or touch any character's face (forehead, eyes, nose, mouth, cheeks, chin). Every face must remain 100% fully visible with a clear gap around it.
+  - 하단: "바닥 쪽, 좌우 구석으로 밀리지 않기, 몸·다리와는 겹쳐도 됨" + FACE_RULE
+  - 상단: "천장 쪽, 얼굴 위, 모자·머리카락과는 겹쳐도 됨" + FACE_RULE
+  - 그 외(사용자 지정 위치 문구): FACE_RULE만
+  - 크기 문장 끝: "never ... touch any character's **face**" (예전 "touch the character")
+- **확인 방법:** `node mcp/scripts/check_typography_prompt.mjs` — Flow 없이 `handleFlowGenerateTypography` 함수만 떼어내(`handleFlowType`은 가짜로) 배치별 프롬프트의 위치·여백 문장을 출력해 비교. 프롬프트 규칙을 고친 뒤 항상 돌려 볼 것(크레딧 안 듦). 하단/상단/기타/slim+하단 4가지 모두 얼굴 규칙이 같은 문장으로 들어가고 방향 충돌 없음을 확인.
+- **규칙:** 여백·겹침 관련 문장을 새로 넣을 때는 `FACE_RULE`을 고치거나 거기에 이어 붙일 것. 배치 분기마다 따로 "피하라" 문장을 늘리지 말 것(충돌의 원인).
