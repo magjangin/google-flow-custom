@@ -450,14 +450,17 @@ async function handleFlowGenerateTypography(args) {
   //  Your Reality 테스트에서 타이틀이 가운데가 아닌 왼쪽 아래 구석으로 밀려남)
   const isTopPlacement = /top|upper|high/i.test(placement);
   const isBottomPlacement = !isTopPlacement && /bottom|lower/i.test(placement);
+  // 얼굴 보호 규칙 (2026-11-28 사용자 결정): 몸(상체·하체·팔·다리·옷·머리카락 끝)은 가려도 되지만 얼굴은 절대 가리지 않는다.
+  // 예전에는 "상체 아래로", "머리·어깨·모자 위로"처럼 몸 전체를 피하게 해서 자리가 부족했고, 정작 중요한 얼굴만 지키면 된다.
+  const FACE_RULE = "FACE PROTECTION RULE: the title may freely overlap characters' bodies (torso, arms, hands, legs, clothing, or the ends of long hair), but it must NEVER cover, cross, or touch any character's face (forehead, eyes, nose, mouth, cheeks, chin). Every face must remain 100% fully visible with a clear gap around it.";
   let placementInstruction = placement;
-  let clearanceInstruction = "Keep a wide safety clearance buffer: never cover any character's face, eyes, or hair.";
+  let clearanceInstruction = FACE_RULE;
   if (isTopPlacement) {
-    placementInstruction = "very high upper top headroom strictly near the top ceiling border of the frame, horizontally centered on the frame's vertical center line, well elevated high above any character heads, hair, ears, shoulders, or hats, keeping a generous empty vertical gap of at least 15-20% frame height above the characters";
-    clearanceInstruction = "Keep a wide safety clearance buffer: the title must stay high in the upper headroom, completely clear of every character's head, face, or hair below it.";
+    placementInstruction = "high upper headroom near the top border of the frame, horizontally centered on the frame's vertical center line, above the characters' faces";
+    clearanceInstruction = `The title stays high near the top border; it may overlap hats, hair, or headwear if needed. ${FACE_RULE}`;
   } else if (isBottomPlacement) {
     placementInstruction = "lower wide foreground near the bottom edge of the frame, horizontally centered on the frame's vertical center line (equal empty space on the left and right), sitting low with a small bottom margin";
-    clearanceInstruction = "Keep a wide safety clearance buffer: the title must stay low near the bottom edge, below every character's face and upper body, never covering any face, eyes, or hair, and never drifting into a left or right corner.";
+    clearanceInstruction = `The title stays low near the bottom edge and never drifts into a left or right corner; it may overlap the characters' bodies or legs. ${FACE_RULE}`;
   }
 
   // 적절한 크기(scale/proportion) 자동 판단 로직
@@ -487,7 +490,7 @@ async function handleFlowGenerateTypography(args) {
     `Keep this exact image, character face, pose, outfit, and background composition completely 100% intact and unchanged.`,
     `Do not alter or redraw the girl/character or the background scene.`,
     `Overlay an ultra high-quality, professional rhythm game / YouTube thumbnail typography title positioned at the ${placementInstruction}.`,
-    `PROPORTION & SIZE SCALE CONTROL: Render the typography title at a ${scaleInstruction}. ${clearanceInstruction} Absolutely never balloon into an oversized giant headline or touch the character.`
+    `PROPORTION & SIZE SCALE CONTROL: Render the typography title at a ${scaleInstruction}. ${clearanceInstruction} Absolutely never balloon into an oversized giant headline or touch any character's face.`
   ];
 
   if (isKoreanMode) {
