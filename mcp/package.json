@@ -1,0 +1,11 @@
+{
+  "name": "google-flow-custom-mcp",
+  "version": "1.1.0",
+  "description": "Antigravity & Claude Code MCP server for Google Flow and Google Flow Custom app",
+  "type": "module",
+  "main": "index.mjs",
+  "scripts": {
+    "start": "node index.mjs",
+    "test:typography": "node scripts/check_typography_prompt.mjs"
+  }
+}

@@ -216,7 +216,8 @@ dotnet publish "google flow custom/google flow custom.csproj" -c Release -r win-
 | `index.mjs` + `remove_watermark.py` | Windows에서 파이프 출력이 cp949라 한글 파일명이 깨지거나 cp949에 없는 글자에서 `UnicodeEncodeError` | Node가 `PYTHONUTF8=1`로 실행, 파이썬도 `sys.stdout.reconfigure(encoding="utf-8")` |
 | `index.mjs` `getActiveWs` | 앱을 껐다 켜면 닫힌 소켓을 계속 붙잡음, 연결 대기에 시간 제한 없음 | `onclose`에서 비움, 연결 5초 제한, `/json` 조회 1.5초 제한 |
 | `index.mjs` `flow_get_downloads` | `removeWatermarks: true`의 오류를 조용히 삼킴, 하위 폴더도 파일처럼 나열 | 결과에 `watermarkResult`(또는 `error`)를 담음, 파일만 나열 |
-| `index.mjs` 파일명 인자 | `filename`/`filenames`/`outputFilename`에 `..\` 같은 경로가 들어오면 다운로드 폴더 밖에 써짐 | `safeFileName`으로 경로 부분 제거 |
+| `index.mjs` 파일명 인자 | `filename`/`filenames`/`outputFilename`에 `..\` 같은 경로가 들어오면 다운로드 폴더 밖에 써짐, `flow_download_images`에서 복수 이미지일 때 단일 `filename`이 무시되고 기본 prefix로 돌아감 | `safeFileName`으로 경로 제거, 복수 이미지 시에도 지정 `filename` 기반 연번(`base_01.png`, `base_02.png`) 유지 |
+| `mcp/package.json` | mcp 디렉터리에 package.json 부재로 모듈 타입 및 테스트 스크립트 표준 부재 | `google-flow-custom-mcp` v1.1.0 package.json 생성 및 .gitignore에 node_modules 등록 |
 | `remove_watermark.py` 제자리 교체 | 원본을 **먼저 지운 뒤** 임시 파일을 옮김 → 그 사이 실패하면 원본 손실 | 임시 파일에 쓰고 `os.replace` 한 번 |
 | `remove_watermark.py` 워터마크 없음 | `none`이어도 원본을 다시 인코딩해 덮어씀(JPG는 매번 화질 손실, 수정 시각 변경) | 제자리 교체 + `none`이면 파일을 건드리지 않음(`rewritten: false`) |
 | `remove_watermark.py` 폴더 처리 | `_clean.png`만 건너뛰어 `_clean.jpg`를 다시 처리 | 확장자 무관 `*_clean.*` 건너뜀 |

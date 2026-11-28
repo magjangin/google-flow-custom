@@ -28,3 +28,8 @@ $RECYCLE.BIN/
 ## Python cache (Scripts/remove_watermark.py 실행 시 생김)
 __pycache__/
 *.pyc
+
+## Node
+node_modules/
+mcp/node_modules/
+

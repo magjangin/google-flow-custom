@@ -765,15 +765,16 @@ async function handleFlowDownloadImages(args) {
     if (!item.b64) continue;
     
     let fname = "";
+    const basePrefix = filename ? filename.replace(/\.[^.\\/]+$/, "") : prefix;
     if (extracted.length === 1 && filename) {
       fname = filename;
     } else if (filenames && filenames[item.index]) {
       fname = filenames[item.index];
     } else if (useTimestamp) {
-      fname = `${prefix}_${Date.now()}_${item.index + 1}.png`;
+      fname = `${basePrefix}_${Date.now()}_${item.index + 1}.png`;
     } else {
       // 난수 없이 직관적인 연번 파일명 (예: BAD_APPLE_01.png)
-      fname = `${prefix}_${String(item.index + 1).padStart(2, '0')}.png`;
+      fname = `${basePrefix}_${String(item.index + 1).padStart(2, '0')}.png`;
     }
 
     fname = safeFileName(fname);
@@ -1002,7 +1003,7 @@ async function handleRpc(req) {
       },
       serverInfo: {
         name: "google-flow-custom",
-        version: "1.0.0"
+        version: "1.1.0"
       }
     });
     return;
