@@ -1,6 +1,7 @@
 # google flow custom — 인수인계 문서 (AGENTS.md)
 
-> 갱신일: 2026-11-25. `youtube studio custom`(GitHub `youtube-studio-tool`)과 같은 구조로 만든 Google Flow 전용 WebView2 뷰어.
+> 갱신일: 2026-11-28 (최초 2026-11-25). `youtube studio custom`(GitHub `youtube-studio-tool`)과 같은 구조로 만든 Google Flow 전용 WebView2 뷰어.
+> 2026-11-28 변경 요약: 타이포그래피 위치/여백 지시 충돌 수정(14절), 워터마크 감지 재작성(12절 → 15절), Claude Code 등록·실행 절차(16절).
 
 ## 0. 프로젝트 개요
 - **무엇인가:** Google Flow(`https://flow.google.com/`)를 독립 창으로 띄우는 Avalonia WebView 앱(net10). 사용자 스크립트(`Scripts/flow-custom.js`)를 문서 생성 시점에 주입.
@@ -86,7 +87,7 @@
 - **빌드 경고 MSB3277 (WindowsBase 4.0 vs 5.0):** `Microsoft.Web.WebView2` 패키지의 WPF 어셈블리 참조 때문. 동작에는 영향 없음.
 - **일반 button.click() 트리거 실패:** Angular Material Button 및 ProseMirror 상호작용 시 단순 `btn.click()`이 무시될 수 있음. CDP의 `Input.dispatchMouseEvent`로 바운딩 렉트 중심 좌표를 쏴야 안정적으로 동작함.
 
-## 9. 실제 DOM 확인 방법
+## 9-2. 실제 DOM 확인 방법
 ```powershell
 $env:WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS = "--remote-debugging-port=9334"; Start-Process "google flow custom\bin\Debug\net10.0\google flow custom.exe"
 ```
@@ -110,6 +111,7 @@ $env:WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS = "--remote-debugging-port=9334"; Sta
   - `sizeScale: "slim"` 지원: 캔버스 높이의 **6~9%** 수준으로 얇고 날렵한 수평 스트립 배너로 제한하여 캐릭터 얼굴과의 간섭을 100% 차단.
 
 ## 12. 워터마크 자동 감지 & 인페인팅 복원 및 다운로드 원본 정리 파이프라인 (2026-11-27 실측 추가)
+> ⚠️ 이 절의 **감지 방식은 2026-11-28에 교체됨(15절)**. 아래 좌표·밝기 판정은 기록용. 다운로드·원본 정리 흐름은 그대로 유효.
 - **배경:** Google Flow 및 Imagen 모델로 생성된 이미지는 우하단 구석에 반투명한 Google DeepMind 4-point star(별) 또는 별 + "AI" 타원형 캡슐 워터마크가 부착되어 썸네일/자켓 활용 시 이질감 유발.
 - **워터마크 패턴 정밀 분석 (1376×768 실측):**
   1. **단독 별 (Single Star):** 우하단 중심 `(w - 93, h - 93)` 좌표, 반경 34px 아스트로이드(4-point star) 곡선. (예: BAD APPLE, YARARARA 등)
@@ -132,3 +134,53 @@ dotnet build "google flow custom.slnx"
 dotnet publish "google flow custom/google flow custom.csproj" -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -p:DebugType=none -o "publish/win-x64"
 ```
 - `publish/`는 `.gitignore` 처리됨.
+
+## 14. 타이포그래피 위치·여백 지시 충돌 수정 (2026-11-28)
+- **증상:** Your Reality(DDLC 모니카) 썸네일에 하단 배치(기본값)로 생성했더니 타이틀이 가운데가 아니라 **왼쪽 아래 구석**에 붙음.
+- **원인 (`mcp/index.mjs` `handleFlowGenerateTypography`):**
+  1. 크기 문장 뒤에 붙는 여백 문장이 배치와 상관없이 항상 `"the title must remain strictly elevated high in the upper headroom"` → 하단 배치 문장과 정면 충돌.
+  2. 하단 배치 문장(`lower wide foreground across the bottom edge`)에 **가운데 정렬 지시가 없었음**.
+  3. `slim`/`singleLine` 크기 문장이 항상 `near the top border`.
+  4. 한글 감지 정규식 `[ㄱ-ㅎ|ㅏ-ㅣ|가-힣]` — 문자 클래스 안 `|`는 글자 그 자체라 제목에 `|`가 있으면 한글 모드로 오판.
+- **수정:** `placementInstruction`과 `clearanceInstruction`을 **같은 분기에서 함께** 만든다(상단=천장 쪽·머리 위 여백 / 하단=바닥 쪽·얼굴 아래·좌우 구석 금지 / 그 외=얼굴만 피하기). 상·하단 모두 `horizontally centered on the frame's vertical center line` 명시. slim 문장도 배치 방향을 따름. 정규식은 `[ㄱ-ㅎㅏ-ㅣ가-힣]`.
+- **규칙:** 위치 관련 문장을 새로 넣을 때는 반드시 `isTopPlacement`/`isBottomPlacement` 분기 안에서 만들 것. 프롬프트 어딘가에 고정 방향 문장이 남으면 모델은 둘 중 하나를 임의로 고른다.
+- 도구 설명(스키마)의 `sizeScale` 숫자도 실제 코드 값(auto 12-16% / compact 10-14% / balanced 14-18% / large 25-30% / slim 6-9%)으로 맞춤.
+- **실측 확인 (2026-11-28):** 같은 원본·같은 인자로 다시 생성 → 수정 전 왼쪽 아래 구석이던 타이틀이 **하단 가운데**(좌우 여백 균형, 모니카 얼굴 아래)로 들어감. 다운로드 시 새 워터마크 감지가 `ai_only`로 캡슐만 지워 `Official Soundtrack` 보존. 결과: `Downloads\GoogleFlow_Downloads\YOUR_REALITY_타이포테스트_v2.png`.
+
+## 15. 워터마크 감지 재작성 — 요소별 고정 위치 판정 (2026-11-28 실측)
+- **증상:** Your Reality 결과물에서 원본 아트의 손글씨 `Official Soundtrack` 중 "nd"가 지워지고, 실제 `AI` 캡슐은 아랫부분이 남음.
+- **원인 (예전 `detect_and_create_watermark_mask`):**
+  - AI 캡슐 판정이 `np.mean(crop) > 120 or np.max(crop) > 200` → **밝은 배경이면 거의 항상 참**.
+  - 별은 감지 실패해도 기본값으로 `(w-93, h-93)`을 **무조건** 칠함 → 그 자리에 있던 원본 글자 손상.
+  - 캡슐 마스크 중심 `(w-60, h-60)`, 반높이 15 → 실제(아래)보다 위로 치우쳐 캡슐 아래쪽 잔상.
+- **실측 데이터:** 이 계정 Flow 프로젝트 7개에서 원본 41장(`deleteOriginal: false`로 받음)을 모아 확인. 기준 가로 1376px:
+  | 요소 | 위치 | 크기 | 비고 |
+  |---|---|---|---|
+  | 별 (단독) | (w-97, h-97) | 아스트로이드 r≈32, p=0.55 | p5_02, p6_10 등 |
+  | 별 (캡슐과 함께) | (w-129, h-129) | 같음 | 캡슐 없이 이 자리만 찍힌 경우도 많음, 한 장에 두 자리 다 찍힌 경우도 있음(p5_03) |
+  | AI 캡슐 | (w-57, h-50) | 약 48×32 둥근 사각형 | 별 없이 캡슐만 붙는 이미지 있음(Nano Banana 2.1, Your Reality) |
+  | 없음 | — | — | 흰 배경, 어두운 영상 프레임 등 41장 중 22장 |
+  - 다른 해상도(예: 512×288 썸네일)는 **가로 비율(w/1376)로 위치·크기가 그대로 축소**됨.
+- **새 방식 (`Scripts/remove_watermark.py`):**
+  - 밝기 하이패스(L − GaussianBlur σ9)에서 **요소마다 고정 위치 ±6px만** 정규화 상관(`TM_CCOEFF_NORMED`)으로 판정. 별은 아스트로이드 템플릿, 캡슐은 **실제 캡슐에서 잘라낸 템플릿** `Scripts/wm_templates/ai_capsule_hp.png`.
+  - 별: 점수 ≥ 0.45 → 별 / 점수 ≥ 0.16 **이면서 위치 오차 ≤ 2px** → 별(네온 글자 위 등 복잡한 배경의 옅은 별). 워터마크 없는 샘플의 최대 점수는 0.14.
+  - 캡슐: 점수 ≥ 0.5 (실제 0.97~1.00, 없는 샘플 ≤ 0.28).
+  - 창의 표준편차 < 1.5(흰 배경처럼 평평)면 판정 안 함 — 평평한 창은 상관값이 1.00으로 튀는 함정.
+  - **찾은 요소만** 마스크(별 r+2, 캡슐 둥근 사각형) → 5×5 팽창 → TELEA 인페인팅. **아무것도 못 찾으면(`none`) 픽셀을 건드리지 않음.**
+  - `detected_type`: `none` / `single_star` / `star_and_ai` / `ai_only` / `two_stars` / `star_with_ai_spot`.
+- **결과 (41장):** 워터마크 있음 19, 없음 22, **워터마크 없는 이미지 오감지 0**. Your Reality는 `ai_only`로 캡슐만 지워지고 `Soundtrack` 보존.
+- **알려진 한계:** 아주 복잡한 배경(네온 글자 한가운데, 밝은 하늘색 무늬 위)의 옅은 별 몇 개(p5_05, p6_01, p6_08)는 못 찾음 → 원본을 망가뜨리는 것보다 별이 남는 쪽을 택함. 별이 글자 위에 있으면 인페인팅 자국이 약간 남을 수 있음.
+- **다음 개선 후보:** 워터마크는 고정 알파 마스크의 흰색 덮어씌우기라, 평평한 샘플에서 알파 맵을 추정하면 인페인팅 대신 **역알파 합성**(`B = (I − α·255)/(1 − α)`)으로 원본 픽셀을 거의 그대로 되살릴 수 있다.
+
+## 16. Claude Code 등록 · 타이포그래피 실행 절차 (2026-11-28 실측)
+- 등록(사용자 범위): `claude mcp add -s user google-flow-custom -- node "H:/source/repos/google flow custom/mcp/index.mjs"` → 새 세션부터 `mcp__google-flow-custom__*` 도구가 보임.
+- 워터마크 스크립트는 MCP가 PATH의 `python`으로 실행 → 그 Python에 `opencv-python`, `numpy` 필요.
+- 타이포그래피 순서(이미지 1장 기준):
+  1. `flow_launch` → `flow_status`로 로그인 확인 (`isLoginNeeded: false`)
+  2. 홈에서 `flow_click("새 프로젝트")` (또는 기존 프로젝트에서 `세션 기록 열기` → `button.create-session-button`으로 새 세션)
+  3. `flow_upload_media([원본])` → 업로드 % 표시가 끝날 때까지 대기
+  4. 소재 칩 붙이기: `button.add-menu-trigger` 클릭 → `.asset-list-viewport` 안의 `button.asset-item` 중 원본 이름을 클릭 → `.prompt-ingredient-bar .chip-image` 1개 확인.
+     - **함정:** `flow_click`(좌표 클릭)으로 트리거를 누르면 메뉴가 열렸다 바로 닫힐 때가 있다. `flow_eval`에서 `button.click()` 후 800ms 기다렸다가 항목을 누르는 쪽이 안정적.
+  5. `flow_generate_typography(...)` (submit 기본 true) → 약 60~90초 생성
+  6. `flow_download_images({filename})` → 워터마크 제거 + 원본 삭제(기본). 결과는 Flow 기본 1376×768.
+- MCP 코드(`index.mjs`)를 고친 뒤 같은 세션에서 바로 확인하려면 `node index.mjs`를 직접 띄워 stdio JSON-RPC(`initialize` → `tools/call`)로 부르면 된다(앱의 CDP 9334에 그대로 붙음).

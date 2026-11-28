@@ -47,9 +47,15 @@
   - `flow_type`: ProseMirror 에디터 호환 텍스트 입력 및 생성 시작(`submit: true`)
   - `flow_click`: Angular / Material Button 대응 물리 마우스 이벤트(`Input.dispatchMouseEvent`) 좌표 클릭
   - `flow_upload_media`: Image-to-Image 합성을 위한 로컬 소재 DataTransfer 일괄 업로드
-  - `flow_generate_typography`: 유튜브 썸네일 & 리듬게임 커스텀 차트 전용 2단 와이드 네온 타이포그래피 자동 생성
+  - `flow_navigate`: Flow 창 안에서 URL 이동 (프로젝트 열기 등)
+  - `flow_eval`: Flow 페이지 콘텍스트에서 JavaScript 실행 (DOM 조사·세부 조작)
+  - `flow_generate_typography`: 유튜브 썸네일 & 리듬게임 커스텀 차트 전용 2단 와이드 네온 타이포그래피 자동 생성 (하단/상단 **가운데** 배치, 위치·여백 지시가 항상 같은 방향)
   - `flow_screenshot`: 실시간 생성 상태 모니터링 캡처
   - `flow_get_downloads`: 생성물 자동 수집 및 로컬 동기화
+  - `flow_download_images`: 현재 화면의 생성 이미지를 원하는 파일명으로 일괄 다운로드 + 워터마크 자동 제거
+  - `flow_remove_watermarks`: 파일/폴더 단위 워터마크 제거 — **실제로 찍힌 요소(별·AI 캡슐)만** 지우고, 없으면 이미지를 건드리지 않음
+
+> 💡 **타이포그래피 생성 전 준비:** `flow_generate_typography`는 현재 열린 프로젝트의 프롬프트 창에 지시문을 넣고 생성만 누릅니다. 먼저 새 프로젝트(또는 새 세션)를 열고 `flow_upload_media`로 원본을 올린 뒤, 프롬프트 창의 `+`(소재 추가)에서 그 이미지를 참조 칩으로 붙여야 원화가 보존됩니다(Image-to-Image). 순서는 [AGENTS.md](AGENTS.md) 14절.
 - 🛠️ **DevTools(F12) 내장**: 우클릭 "검사" 또는 F12 키로 언제든 실제 DOM을 열람하고 디버깅할 수 있습니다.
 
 ---
@@ -107,6 +113,14 @@ Antigravity 또는 Claude Code에서 Google Flow를 자율 조종할 수 있도�
 }
 ```
 
+Claude Code에서는 명령 한 줄로 사용자 범위(모든 프로젝트)에 등록할 수 있습니다. 등록 후 새 세션부터 도구가 보입니다.
+
+```powershell
+claude mcp add -s user google-flow-custom -- node "H:/source/repos/google flow custom/mcp/index.mjs"
+```
+
+워터마크 제거(`flow_remove_watermarks`, `flow_download_images`)는 PATH의 `python`으로 `Scripts/remove_watermark.py`를 실행하므로 **Python 3 + `opencv-python` + `numpy`**가 필요합니다.
+
 ---
 
 ## 📂 프로젝트 구조
@@ -118,7 +132,10 @@ google-flow-custom/
 │   ├── MainWindow.axaml (.cs)      # 메인 윈도우 레이아웃 및 뷰어 바인딩
 │   ├── GoogleFlowWebView.cs        # WebView2 환경 구성 (프로필, 다운로드, 스크립트 주입)
 │   ├── Scripts/
-│   │   └── flow-custom.js          # 사용자 정의 CSS/JS 주입 스크립트 (임베디드 리소스)
+│   │   ├── flow-custom.js          # 사용자 정의 CSS/JS 주입 스크립트 (임베디드 리소스)
+│   │   ├── remove_watermark.py     # 워터마크 감지(요소별 고정 위치 상관) + 인페인팅 복원
+│   │   └── wm_templates/
+│   │       └── ai_capsule_hp.png   # 실제 "AI" 캡슐 워터마크의 하이패스 템플릿 (감지용)
 │   └── Assets/
 │       └── icon.png / icon.ico     # 애플리케이션 아이콘
 ├── mcp/

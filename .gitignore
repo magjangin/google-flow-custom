@@ -24,3 +24,7 @@ $RECYCLE.BIN/
 
 ## Antigravity
 .gemini/
+
+## Python cache (Scripts/remove_watermark.py 실행 시 생김)
+__pycache__/
+*.pyc
