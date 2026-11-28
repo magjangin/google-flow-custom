@@ -2,6 +2,7 @@
 
 > 갱신일: 2026-11-28 (최초 2026-11-25). `youtube studio custom`(GitHub `youtube-studio-tool`)과 같은 구조로 만든 Google Flow 전용 WebView2 뷰어.
 > 2026-11-28 변경 요약: 타이포그래피 위치/여백 지시 충돌 수정(14절), 워터마크 감지 재작성(12절 → 15절), Claude Code 등록·실행 절차(16절).
+> 2026-11-28 (2차) 전체 감사: 버그·병목 수정과 실행·검증 방법 정리(18절). **새 작업은 18절부터 읽을 것.**
 
 ## 0. 프로젝트 개요
 - **무엇인가:** Google Flow(`https://flow.google.com/`)를 독립 창으로 띄우는 Avalonia WebView 앱(net10). 사용자 스크립트(`Scripts/flow-custom.js`)를 문서 생성 시점에 주입.
@@ -184,6 +185,7 @@ dotnet publish "google flow custom/google flow custom.csproj" -c Release -r win-
   3. `flow_upload_media([원본])` → 업로드 % 표시가 끝날 때까지 대기
   4. 소재 칩 붙이기: `button.add-menu-trigger` 클릭 → `.asset-list-viewport` 안의 `button.asset-item` 중 원본 이름을 클릭 → `.prompt-ingredient-bar .chip-image` 1개 확인.
      - **함정:** `flow_click`(좌표 클릭)으로 트리거를 누르면 메뉴가 열렸다 바로 닫힐 때가 있다. `flow_eval`에서 `button.click()` 후 800ms 기다렸다가 항목을 누르는 쪽이 안정적.
+     - ⚠️ 2026-11-28 감사에서 원인 확인: 예전 `flow_click`은 좌표 클릭 **뒤에 JS `el.click()`을 또 보내** 한 번에 두 번 눌렀다(열기→닫기). 지금은 둘 중 하나만 보낸다(18절). 메뉴 트리거에 `flow_click`을 다시 써 봐도 되지만, 아직 이 메뉴로 실측하지는 않았다.
   5. `flow_generate_typography(...)` (submit 기본 true) → 약 60~90초 생성
   6. `flow_download_images({filename})` → 워터마크 제거 + 원본 삭제(기본). 결과는 Flow 기본 1376×768.
 - **실측 2 (드림모드, 한글 제목):** `title: "드림모드"`, `language: "ko"` → 철자 정확, 하단 가운데 배치 OK. 다만 타이틀 2줄 합이 화면 높이의 약 24%(규칙 12~16%)로 크게 나옴 — 크기는 모델이 완전히 지키지 않는 부분이라, 더 작게 원하면 `sizeScale: "compact"`를 쓸 것. 빨간 잠옷 캐릭터의 다리를 일부 가린 것은 17절 규칙상 허용(얼굴은 가리지 않음).
@@ -200,3 +202,48 @@ dotnet publish "google flow custom/google flow custom.csproj" -c Release -r win-
   - 크기 문장 끝: "never ... touch any character's **face**" (예전 "touch the character")
 - **확인 방법:** `node mcp/scripts/check_typography_prompt.mjs` — Flow 없이 `handleFlowGenerateTypography` 함수만 떼어내(`handleFlowType`은 가짜로) 배치별 프롬프트의 위치·여백 문장을 출력해 비교. 프롬프트 규칙을 고친 뒤 항상 돌려 볼 것(크레딧 안 듦). 하단/상단/기타/slim+하단 4가지 모두 얼굴 규칙이 같은 문장으로 들어가고 방향 충돌 없음을 확인.
 - **규칙:** 여백·겹침 관련 문장을 새로 넣을 때는 `FACE_RULE`을 고치거나 거기에 이어 붙일 것. 배치 분기마다 따로 "피하라" 문장을 늘리지 말 것(충돌의 원인).
+
+## 18. 전체 감사 (2026-11-28, 2차) — 버그·보안·병목 수정과 실행·검증 방법
+작업 브랜치 `chore/audit-2026-11-28` → `main` 머지. 대상: `mcp/index.mjs`, `Scripts/remove_watermark.py`. C# 앱·`flow-custom.js`는 문제 없어 그대로 둠.
+
+### 18-1. 고친 버그
+| 위치 | 증상/원인 | 수정 |
+|---|---|---|
+| `index.mjs` `DEFAULT_EXE_PATHS` | 하드코딩 문자열 `"...\bin\Debug\..."`에서 `\D`가 JS에서 그냥 `D`로 풀려 **Debug 빌드 exe를 영영 못 찾음**(publish 폴더가 없으면 `flow_launch` 실패) | 경로를 `import.meta.url` 기준 `REPO_ROOT`에서 `join`으로 계산. publish → Release → Debug 순 |
+| `index.mjs` `handleFlowClick` | 좌표 클릭 뒤 "폴백"이라며 JS `el.click()`을 **항상 한 번 더** 보냄 → 토글형 버튼·메뉴가 열렸다 바로 닫힘(16절 함정의 원인) | `elementFromPoint`로 좌표가 그 요소에 닿는지(`hitsTarget`) 보고, 닿으면 좌표 클릭만, 가려졌으면 JS 클릭만. 결과에 `method: "mouse" | "js"` |
+| `index.mjs` `handleFlowClick` | 버튼 텍스트(예: `새 프로젝트`)를 `querySelector`에 넣으면 잘못된 선택자 예외가 날 수 있음 | `try`로 감싸고 텍스트 검색으로 넘어감 |
+| `index.mjs` `runWatermarkRemover` | `python`이 PATH에 없으면 `spawn`의 `error` 이벤트에 리스너가 없어 **MCP 프로세스 전체가 죽음** | `error` 리스너로 reject. 앱 실행 `spawn`에도 같은 처리 |
+| `index.mjs` + `remove_watermark.py` | Windows에서 파이프 출력이 cp949라 한글 파일명이 깨지거나 cp949에 없는 글자에서 `UnicodeEncodeError` | Node가 `PYTHONUTF8=1`로 실행, 파이썬도 `sys.stdout.reconfigure(encoding="utf-8")` |
+| `index.mjs` `getActiveWs` | 앱을 껐다 켜면 닫힌 소켓을 계속 붙잡음, 연결 대기에 시간 제한 없음 | `onclose`에서 비움, 연결 5초 제한, `/json` 조회 1.5초 제한 |
+| `index.mjs` `flow_get_downloads` | `removeWatermarks: true`의 오류를 조용히 삼킴, 하위 폴더도 파일처럼 나열 | 결과에 `watermarkResult`(또는 `error`)를 담음, 파일만 나열 |
+| `index.mjs` 파일명 인자 | `filename`/`filenames`/`outputFilename`에 `..\` 같은 경로가 들어오면 다운로드 폴더 밖에 써짐 | `safeFileName`으로 경로 부분 제거 |
+| `remove_watermark.py` 제자리 교체 | 원본을 **먼저 지운 뒤** 임시 파일을 옮김 → 그 사이 실패하면 원본 손실 | 임시 파일에 쓰고 `os.replace` 한 번 |
+| `remove_watermark.py` 워터마크 없음 | `none`이어도 원본을 다시 인코딩해 덮어씀(JPG는 매번 화질 손실, 수정 시각 변경) | 제자리 교체 + `none`이면 파일을 건드리지 않음(`rewritten: false`) |
+| `remove_watermark.py` 폴더 처리 | `_clean.png`만 건너뛰어 `_clean.jpg`를 다시 처리 | 확장자 무관 `*_clean.*` 건너뜀 |
+
+### 18-2. 병목 해결
+- `flow_download_images`: 예전에는 **이미지마다 python을 새로 띄움**(OpenCV import 포함 장당 ~1초). → `remove_watermark.py --files a b c`로 한 번에 처리.
+- `remove_watermark.py`: 별 마스크를 **화면 전체(1376×768) 격자로 거듭제곱 계산** → 별 주변 사각형만 계산. LAB 변환 1회로 줄임, 템플릿은 `lru_cache`. 25장×2배율(50건) 감지가 1.37초 → 0.81초, **마스크는 50건 모두 바이트 단위로 동일**(회귀 비교).
+- `flow_upload_media`: base64 → 일반 JS 배열 → `Uint8Array` 복사를 `fetch(data:…).blob()` 한 번으로.
+- `ensureAppRunning`: 800ms 간격 → 400ms 간격 확인(준비되는 즉시 반환).
+
+### 18-3. 보안 점검 결과
+- 저장소 전체 이력(`git log --all -p`)에서 API 키·토큰·비밀번호 패턴 검색 → **노출 없음**. 긴 문자열은 배지 SVG base64뿐.
+- MCP는 로컬 stdio 전용이고 CDP 포트(9334)는 `127.0.0.1`에만 붙는다. 단 CDP 포트가 열려 있는 동안은 같은 PC의 다른 프로그램도 Google 로그인 세션을 조종할 수 있으니, 공용 PC에서는 MCP 작업 후 앱을 끌 것.
+- `flow_eval`은 Flow 페이지에서 임의 JS를 실행하는 도구다(의도된 기능). 웹 페이지·파일에서 읽은 문장을 그대로 넣지 말 것.
+
+### 18-4. adb-mcp 호환 (건드리면 안 되는 것)
+- `H:\source\repos\adb-mcp\local\ps_custom.py`(Photoshop `remove_flow_watermark`)가 `remove_watermark.py`를 **import해서 `detect_and_create_watermark_mask(img) -> (mask, detected_type)`만** 쓴다. 이 이름·시그니처·반환 형식과 `wm_templates/` 위치는 바꾸지 말 것. 이번 감사에서도 그대로 유지했고 회귀 비교로 출력이 같음을 확인.
+- `process_directory`의 안 쓰던 `pattern` 인자는 제거(사용처 없음).
+
+### 18-5. 시도했다가 버린 것 (Dead Ends, 이번 감사)
+- **이미 워터마크를 지운 파일에 다시 돌리기:** `Downloads\GoogleFlow_Downloads`의 정리된 25장 중 일부(예: `TETORIS_01.png` 원본 크기, 여러 장의 축소본)가 다시 `single_star` 등으로 감지된다 — 인페인팅 자국이 별 모양 상관에 걸리는 것. 그래서 `flow_get_downloads({removeWatermarks: true})`(폴더 전체)를 반복 실행하면 같은 자리를 또 칠한다. **폴더 일괄 처리는 새로 받은 원본에만 쓸 것.** 처리 여부 표시(파일 메타데이터)는 OpenCV `imencode`로는 못 남겨서 이번엔 하지 않음.
+- **업로드한 테스트 소재를 MCP로 휴지통 보내기:** 카드 위 `옵션 더보기` 버튼이 DOM 순서와 화면 카드가 일치하지 않고, 카드 제목은 마우스를 올렸을 때만 DOM에 생긴다. JS로 "이름이 X인 카드의 메뉴"를 고르려다 **다른 카드(사용자 원본)의 메뉴가 열림** → 삭제는 하지 않고 닫음. 소재 삭제를 자동화하려면 먼저 CDP `Input.dispatchMouseEvent`(`mouseMoved`)로 그 카드에 호버한 뒤 열린 메뉴의 위치가 그 카드 옆인지 확인해야 한다.
+
+### 18-6. 실행 · 검증 방법
+1. 정적 검사: `node --check mcp/index.mjs`
+2. 프롬프트 규칙(크레딧 0): `node mcp/scripts/check_typography_prompt.mjs`
+3. 워터마크 회귀(크레딧 0): 수정 전 파일을 따로 복사해 두고, 같은 샘플 폴더에 대해 `detect_and_create_watermark_mask`의 `(detected_type, mask md5)`를 원본 크기와 축소본(×0.372 ≈ 512폭) 모두 비교. 하나라도 다르면 의도한 변경인지 확인.
+4. MCP 실호출: 서버를 직접 띄워 stdio JSON-RPC로 `initialize` → `tools/call`. (Claude Code에 붙은 MCP는 **세션 시작 때 코드를 읽으므로, `index.mjs`를 고친 뒤에는 새 세션에서 MCP를 다시 연결해야 반영된다.**)
+5. 2026-11-28 실호출 결과(12개 도구 전부 정상): `flow_launch`(Debug exe 실행, 1.3초) · `flow_status` · `flow_navigate` · `flow_eval` · `flow_click`(`.ProseMirror`, `method: "mouse"`) · `flow_type`(제출 안 함) · `flow_generate_typography`(`submit: false`, 생성 안 함, 입력창은 비워 둠) · `flow_screenshot` · `flow_download_images`(`limit: 1`, `star_and_ai` 감지·제거, 한 번의 python 실행) · `flow_get_downloads` · `flow_remove_watermarks`(임시 폴더 사본, `outputPath` 지정) · `flow_upload_media`(테스트 프로젝트 `11월 28 - 14:35`에 `AUDIT_UPLOAD.png` 1장 업로드 성공 — **이 테스트 소재는 Flow에 남아 있음**, 18-5 참고).
+6. 검증이 끝나면 띄운 앱(`google flow custom.exe`)을 끄고, 테스트로 받은 파일(`AUDIT_TEST_*.png`)은 지운다.

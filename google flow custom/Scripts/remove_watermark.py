@@ -8,8 +8,9 @@ OpenCV cv2.inpaint(TELEA)로 원본 디테일을 손상 없이 자연스럽게 �
 
 import sys
 import os
+import json
 import argparse
-import glob
+from functools import lru_cache
 from pathlib import Path
 import cv2
 import numpy as np
@@ -47,11 +48,17 @@ RING_FRAC_MIN = 0.5      # 고리 픽셀 중 배경보다 1 이상 어두운 비
 _TPL_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "wm_templates")
 
 
-def _highpass(img):
-    L = cv2.cvtColor(img, cv2.COLOR_BGR2LAB)[:, :, 0].astype(np.float32)
+def _lightness(img):
+    return cv2.cvtColor(img, cv2.COLOR_BGR2LAB)[:, :, 0].astype(np.float32)
+
+
+def _highpass(img, L=None):
+    if L is None:
+        L = _lightness(img)
     return L - cv2.GaussianBlur(L, (0, 0), 9)
 
 
+@lru_cache(maxsize=8)
 def _star_template(r, pad=6):
     s = 2 * (r + pad) + 1
     yy, xx = np.mgrid[0:s, 0:s] - (r + pad)
@@ -59,6 +66,7 @@ def _star_template(r, pad=6):
     return (d <= r).astype(np.float32)
 
 
+@lru_cache(maxsize=1)
 def _capsule_template():
     t = cv2.imread(os.path.join(_TPL_DIR, "ai_capsule_hp.png"), cv2.IMREAD_GRAYSCALE)
     if t is None:
@@ -105,8 +113,8 @@ def detect_watermarks(img):
     """찾은 워터마크 요소 목록. 요소: {kind, cx, cy, score, ...}"""
     h, w = img.shape[:2]
     s = w / BASE_W
-    hp = _highpass(img)
-    L = cv2.cvtColor(img, cv2.COLOR_BGR2LAB)[:, :, 0].astype(np.float32)
+    L = _lightness(img)  # LAB 변환은 한 번만
+    hp = _highpass(img, L)
     search = max(2, int(round(SEARCH * s)))
     found = []
 
@@ -139,9 +147,12 @@ def _mask_for(img, found):
     for f in found:
         if f["kind"].startswith("star"):
             r = f["r"] + (4 * f["r"] / STAR_R if f.get("outline") else 2)  # 테두리형은 고리(33~35)까지 덮도록
-            yy, xx = np.mgrid[0:h, 0:w]
+            # 전체 화면이 아니라 별 주변 사각형만 계산(같은 결과, 1376x768 기준 수십 배 적은 연산)
+            x0, x1 = max(0, int(f["cx"] - r) - 1), min(w, int(f["cx"] + r) + 2)
+            y0, y1 = max(0, int(f["cy"] - r) - 1), min(h, int(f["cy"] + r) + 2)
+            yy, xx = np.mgrid[y0:y1, x0:x1]
             d = (np.abs(xx - f["cx"]) ** STAR_P + np.abs(yy - f["cy"]) ** STAR_P) ** (1 / STAR_P)
-            mask[d <= r] = 255
+            mask[y0:y1, x0:x1][d <= r] = 255
         else:
             rx, ry = int(round(f["rx"])), int(round(f["ry"]))
             cx, cy = int(round(f["cx"])), int(round(f["cy"]))
@@ -193,9 +204,6 @@ def remove_watermark_from_image(input_path, output_path=None, delete_original=Fa
 
     mask, detected_type = detect_and_create_watermark_mask(img)
 
-    # 워터마크가 없으면 픽셀을 건드리지 않는다(원본 그대로 저장/유지)
-    restored = img if detected_type == "none" else cv2.inpaint(img, mask, 3, cv2.INPAINT_TELEA)
-
     # 저장 경로 결정
     if output_path is None:
         if delete_original:
@@ -204,21 +212,28 @@ def remove_watermark_from_image(input_path, output_path=None, delete_original=Fa
             p = Path(input_path)
             output_path = str(p.parent / f"{p.stem}_clean{p.suffix}")
 
+    same_file = os.path.abspath(input_path) == os.path.abspath(output_path)
+    if detected_type == "none" and same_file:
+        # 워터마크가 없고 제자리 교체면 파일을 다시 쓰지 않는다.
+        # (예전에는 다시 인코딩해 덮어써서 JPG는 매번 화질이 깎이고 수정 시각도 바뀌었다)
+        return {"status": "success", "input": input_path, "output": output_path,
+                "detected_type": detected_type, "original_deleted": False, "rewritten": False}
+
+    # 워터마크가 없으면 픽셀을 건드리지 않는다(원본 그대로 저장/유지)
+    restored = img if detected_type == "none" else cv2.inpaint(img, mask, 3, cv2.INPAINT_TELEA)
+
     # 임시 파일로 저장 후 원본 교체 또는 저장
     ext = os.path.splitext(output_path)[1]
     is_success, encoded_img = cv2.imencode(ext if ext else ".png", restored)
     if not is_success:
         raise RuntimeError("이미지 인코딩에 실패했습니다.")
 
-    # 원본 파일 교체 모드인 경우
-    if os.path.abspath(input_path) == os.path.abspath(output_path):
-        temp_out = input_path + ".tmp.png"
+    # 원본 파일 교체 모드인 경우: 임시 파일에 쓴 뒤 os.replace로 한 번에 바꾼다
+    # (예전처럼 원본을 먼저 지우면 그 사이 실패할 때 원본까지 잃는다)
+    if same_file:
+        temp_out = input_path + ".tmp" + (ext if ext else ".png")
         with open(temp_out, "wb") as f:
             encoded_img.tofile(f)
-        try:
-            os.remove(input_path)
-        except Exception:
-            pass
         os.replace(temp_out, output_path)
     else:
         with open(output_path, "wb") as f:
@@ -237,44 +252,57 @@ def remove_watermark_from_image(input_path, output_path=None, delete_original=Fa
         "original_deleted": delete_original
     }
 
-def process_directory(dir_path, delete_original=False, pattern="*.*"):
-    """디렉토리 내 모든 이미지 일괄 워터마크 인페인팅 복원"""
-    valid_exts = {".png", ".jpg", ".jpeg", ".webp"}
+VALID_EXTS = {".png", ".jpg", ".jpeg", ".webp"}
+
+
+def process_files(paths, delete_original=False):
+    """여러 파일을 한 프로세스에서 처리(MCP flow_download_images가 python을 한 번만 띄우도록). 결과는 입력 순서대로."""
     results = []
-    
-    # glob으로 탐색
+    for full_path in paths:
+        try:
+            results.append(remove_watermark_from_image(full_path, delete_original=delete_original))
+        except Exception as e:
+            results.append({"status": "error", "file": full_path, "error": str(e)})
+    return results
+
+
+def process_directory(dir_path, delete_original=False):
+    """디렉토리 내 모든 이미지 일괄 워터마크 인페인팅 복원 (이미 만든 *_clean.* 결과물은 건너뜀)"""
+    paths = []
     for root, _, files in os.walk(dir_path):
         for file in files:
-            ext = os.path.splitext(file)[1].lower()
-            if ext in valid_exts and not file.endswith("_clean.png"):
-                full_path = os.path.join(root, file)
-                try:
-                    res = remove_watermark_from_image(full_path, delete_original=delete_original)
-                    results.append(res)
-                except Exception as e:
-                    results.append({"status": "error", "file": full_path, "error": str(e)})
-
-    return results
+            stem, ext = os.path.splitext(file)
+            if ext.lower() in VALID_EXTS and not stem.endswith("_clean"):
+                paths.append(os.path.join(root, file))
+    return process_files(sorted(paths), delete_original=delete_original)
 
 def main():
     parser = argparse.ArgumentParser(description="Google Flow 이미지 워터마크 제거 인페인팅 도구")
     parser.add_argument("--file", "-f", help="처리할 단일 이미지 파일 경로")
     parser.add_argument("--dir", "-d", help="처리할 디렉토리 경로")
+    parser.add_argument("--files", nargs="+", help="처리할 이미지 파일 여러 개 (한 번에 처리)")
     parser.add_argument("--out", "-o", help="출력 파일 경로 (생략 시 원본 대체 또는 _clean 접미사)")
     parser.add_argument("--delete-original", action="store_true", default=False, help="워터마크가 있는 원본 사진 삭제")
     parser.add_argument("--replace", action="store_true", default=False, help="원본 파일을 복원된 이미지로 직접 교체")
 
     args = parser.parse_args()
 
+    # 파이프로 받는 쪽(MCP, Node)은 UTF-8을 기대한다. Windows 기본(cp949)이면 한글 파일명이 깨지거나 죽는다.
+    try:
+        sys.stdout.reconfigure(encoding="utf-8")
+    except Exception:
+        pass
+
     delete_orig = args.delete_original or args.replace
 
     if args.file:
         res = remove_watermark_from_image(args.file, output_path=args.out, delete_original=delete_orig)
-        import json
         print(json.dumps(res, ensure_ascii=False, indent=2))
+    elif args.files:
+        res_list = process_files(args.files, delete_original=delete_orig)
+        print(json.dumps({"processed_count": len(res_list), "results": res_list}, ensure_ascii=False, indent=2))
     elif args.dir:
         res_list = process_directory(args.dir, delete_original=delete_orig)
-        import json
         print(json.dumps({"processed_count": len(res_list), "results": res_list}, ensure_ascii=False, indent=2))
     else:
         parser.print_help()
